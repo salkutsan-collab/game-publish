@@ -44,7 +44,16 @@ function applyFx(fx){
   if(fx.gloss)  fx.gloss.forEach(function(g){ if(S.gloss.indexOf(g)<0) S.gloss.push(g); });
   if(fx.art && S.arts.indexOf(fx.art)<0) S.arts.push(fx.art);
   if(fx.flag)   for(var k in fx.flag) S.flags[k]=fx.flag[k];
+  if(fx.tech)   for(var k in fx.tech) S.tech.forEach(function(t){ if(t.id===k) t.st=fx.tech[k]; });
   if(fx.defer){ S.defers.push(fx.defer); logEv("defer",{text:fx.defer}); }
+}
+/* списать ядро-часы; если своих нет (аутсорс) - платим подрядчику деньгами */
+function spendCores(n){
+  if(!n) return "";
+  if(S.res.cores >= n){ S.res.cores -= n; return ""; }
+  var fee = Math.max(2, Math.round(n/10000));
+  S.res.budget = Math.max(0, S.res.budget - fee);
+  return " Своих ядро-часов нет - счет подрядчика: -"+fee+" млн.";
 }
 
 /* ---------- утилиты ---------- */
@@ -279,6 +288,190 @@ function confirmMatrix(sc){
   goNext(sc);
 }
 
+/* ---------- tree: сборка системы моделей (акт 3) ---------- */
+function treeCount(){
+  var done = S.ui.tdone || [];
+  var n = A3TREE.start;
+  A3TREE.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(done.indexOf(nd.id)>=0) n += nd.n; }); });
+  return n;
+}
+function renderTree(sc){
+  var done = S.ui.tdone || [];
+  var total = 0; A3TREE.levels.forEach(function(lv){ total += lv.nodes.length; });
+  var html = "<div class='task'>"+sub(sc.task)+"</div><div class='tree'>";
+  A3TREE.levels.forEach(function(lv, li){
+    html += "<div class='tlevel'><h5>"+esc(lv.t)+"</h5><div class='tnodes'>";
+    lv.nodes.forEach(function(nd){
+      var on = done.indexOf(nd.id)>=0;
+      html += "<div class='tnode"+(on?" on":"")+"' onclick=\"G.treeNode('"+nd.id+"')\">"+
+        "<div class='tt'>"+esc(nd.t)+"</div><div class='tn'>"+(on?"+"+nd.n+" моделей":"запустить разработку")+"</div></div>";
+    });
+    html += "</div></div>";
+    if(li < A3TREE.levels.length-1) html += "<div class='tlink'>↓ результаты уровня питают следующий ↓</div>";
+  });
+  html += "</div>";
+  html += "<div class='adv-say show' id='treeinfo' style='"+(S.ui.tinfo?"":"display:none")+"'>"+(S.ui.tinfo||"")+"</div>";
+  var cnt = treeCount(), allDone = done.length===total;
+  html += "<div class='mxstatus'>Моделей в системе: <b style='font-size:16px;color:var(--acc2)'>"+cnt+"</b> из "+A3TREE.target+
+    (allDone ? " - <span style='color:var(--ok)'>система собрана</span>" : "") + "</div>";
+  if(allDone) html += "<div class='verdict show good'><b>Гарин:</b> "+esc(A3TREE.done)+"</div>";
+  shell(sc, html, nextBtnHtml("Готово", allDone));
+}
+function treeNode(id){
+  var sc = STORY.scenes[S.scene];
+  S.ui.tdone = S.ui.tdone || [];
+  var node = null;
+  A3TREE.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(nd.id===id) node=nd; }); });
+  if(S.ui.tdone.indexOf(id)<0){ S.ui.tdone.push(id); logEv("tree",{node:id}); }
+  S.ui.tinfo = "<b>"+esc(node.t)+":</b> "+esc(node.info);
+  save(); renderTree(sc);
+}
+function confirmTree(sc){
+  var total = 0; A3TREE.levels.forEach(function(lv){ total += lv.nodes.length; });
+  if((S.ui.tdone||[]).length!==total) return;
+  if(sc.cost) applyFx({weeks:sc.cost.weeks||0, budget:sc.cost.budget||0});
+  logEv("treeDone",{models:treeCount()});
+  goNext(sc);
+}
+
+/* ---------- diag: диагностика расчета (акт 4, верификация) ---------- */
+function renderDiag(sc){
+  var st = S.ui.dg || (S.ui.dg = {stage:{}, finds:[], concluded:false});
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(A4DIAG.intro)+"</div>";
+  html += "<div class='choices' style='grid-template-columns:repeat(auto-fit,minmax(230px,1fr))'>";
+  A4DIAG.actions.forEach(function(a,i){
+    var sIdx = st.stage[a.id]||0;
+    var spent = a.trap ? false : sIdx >= a.stages.length;
+    var label = a.t;
+    var costTxt = "";
+    if(!a.trap && !spent){
+      var c = a.stages[sIdx].cost;
+      var parts = [];
+      if(c.weeks) parts.push("-"+c.weeks+" нед");
+      if(c.cores) parts.push("-"+(c.cores/1000)+" тыс. ядро-часов");
+      costTxt = parts.length ? "<div class='cost'><i class='minus'>"+parts.join(" · ")+"</i></div>" : "<div class='cost'><i class='note'>бесплатно</i></div>";
+    }
+    html += "<div class='card"+(spent?" sel":"")+"' onclick=\"G.diagAct("+i+")\"><h4>"+esc(label)+"</h4>"+
+      (spent?"<div class='cost'><i class='note'>выполнено</i></div>":costTxt)+"</div>";
+  });
+  html += "</div>";
+  if(st.finds.length){
+    html += "<div class='findings'>"+st.finds.map(function(f){ return "<div class='find'>"+f+"</div>"; }).join("")+"</div>";
+  }
+  html += "<div class='verdict' id='verdict'></div>";
+  html += "<div class='hint' id='hintbox'><b>Гарин:</b> "+esc(sc.hint||"")+"</div>";
+  /* диагноз доступен после сходимости сетки */
+  var meshDone = (st.stage[A4DIAG.needId]||0) >= 2;
+  if(meshDone && !st.concluded){
+    html += "<div class='step-title'>"+esc(A4DIAG.conclude.q)+"</div><div id='conc'>"+
+      A4DIAG.conclude.options.map(function(o,k){
+        return "<div class='jopt' id='copt"+k+"' onclick='G.diagConclude("+k+")'><span class='dot'></span>"+esc(o.t)+"</div>";
+      }).join("")+"</div><div class='verdict' id='cverdict'></div>";
+  }
+  shell(sc, html, hintBtnHtml() + nextBtnHtml("Продолжить", !!st.concluded));
+}
+function diagAct(i){
+  var sc = STORY.scenes[S.scene], a = A4DIAG.actions[i];
+  var st = S.ui.dg;
+  if(a.trap){
+    logEv("diag",{act:a.id, trap:true});
+    applyFx({trust:-4});
+    st.finds.push("<b style='color:var(--bad)'>"+esc(a.t.replace(/^[^\s]+\s/,""))+":</b> "+esc(a.verdict));
+    save(); renderDiag(sc); renderTop(sc);
+    return;
+  }
+  var sIdx = st.stage[a.id]||0;
+  if(sIdx >= a.stages.length) return;
+  var stage = a.stages[sIdx];
+  var extra = "";
+  if(stage.cost){
+    if(stage.cost.weeks) applyFx({weeks:stage.cost.weeks});
+    extra = spendCores(stage.cost.cores||0);
+  }
+  st.stage[a.id] = sIdx+1;
+  st.finds.push("<b style='color:var(--acc2)'>Проверка:</b> "+esc(stage.find)+(extra?"<b style='color:var(--warn)'>"+extra+"</b>":""));
+  logEv("diag",{act:a.id, stage:sIdx+1});
+  save(); renderDiag(sc); renderTop(sc); renderSide();
+}
+function diagConclude(k){
+  var sc = STORY.scenes[S.scene], o = A4DIAG.conclude.options[k];
+  var st = S.ui.dg;
+  document.querySelectorAll("#conc .jopt").forEach(function(x){ x.classList.remove("good","weak","bad"); });
+  var elc = el("copt"+k); if(elc) elc.classList.add(o.q);
+  var v = el("cverdict");
+  v.className = "verdict show "+o.q;
+  v.innerHTML = sub(o.fb);
+  logEv("diagConclude",{opt:o.t, q:o.q, hint:!!S.ui.hintUsed});
+  if(o.q==="good"){
+    st.concluded = true;
+    applyFx({trust:2});
+    el("nextbtn").classList.add("ready");
+  } else {
+    applyFx({trust:-2});
+  }
+  save(); renderTop(sc);
+}
+
+/* ---------- valid: сверка расчет-эксперимент (акт 5) ---------- */
+function vchartSvg(calibrated){
+  /* АЧХ: расчет (оранжевая) vs эксперимент (голубая); рабочая зона слева */
+  var W=560, H=210, padL=44, padB=26, zoneW=(W-padL)*A5VALID.workZone;
+  function pts(arr){ return arr.map(function(p){ return (padL+p[0]*(W-padL-8)).toFixed(0)+","+(H-padB-p[1]*(H-padB-18)).toFixed(0); }).join(" "); }
+  var exp = [[0,.12],[ .12,.55],[.2,.2],[.34,.68],[.42,.25],[.55,.32],[.66,.75],[.78,.3],[.9,.5],[1,.22]];
+  var calc0 = [[0,.12],[.12,.57],[.2,.22],[.34,.71],[.42,.27],[.55,.34],[.66,.92],[.78,.42],[.9,.66],[1,.34]];
+  var calcC = [[0,.12],[.12,.56],[.2,.21],[.34,.7],[.42,.26],[.55,.33],[.66,.78],[.78,.32],[.9,.53],[1,.24]];
+  var calc = calibrated ? calcC : calc0;
+  return "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;background:#0c1626;border:1px solid var(--line);border-radius:10px'>"+
+    "<rect x='"+padL+"' y='10' width='"+zoneW.toFixed(0)+"' height='"+(H-padB-10)+"' fill='rgba(90,209,138,.06)'/>"+
+    "<line x1='"+(padL+zoneW).toFixed(0)+"' y1='10' x2='"+(padL+zoneW).toFixed(0)+"' y2='"+(H-padB)+"' stroke='var(--line)' stroke-dasharray='4 4'/>"+
+    "<text x='"+(padL+8)+"' y='24' font-size='10' fill='var(--ok)'>рабочая зона · расхождение ~"+(calibrated?"3":"4")+"%</text>"+
+    "<text x='"+(padL+zoneW+8).toFixed(0)+"' y='24' font-size='10' fill='"+(calibrated?"var(--ok)":"var(--bad)")+"'>выше · "+(calibrated?"~4% после калибровки":"до 18%")+"</text>"+
+    "<line x1='"+padL+"' y1='"+(H-padB)+"' x2='"+(W-6)+"' y2='"+(H-padB)+"' stroke='var(--line)'/>"+
+    "<line x1='"+padL+"' y1='10' x2='"+padL+"' y2='"+(H-padB)+"' stroke='var(--line)'/>"+
+    "<text x='"+(W/2)+"' y='"+(H-8)+"' font-size='10' fill='var(--dim)' text-anchor='middle'>частота</text>"+
+    "<text x='14' y='"+(H/2)+"' font-size='10' fill='var(--dim)' transform='rotate(-90 14 "+(H/2)+")' text-anchor='middle'>амплитуда отклика</text>"+
+    "<polyline points='"+pts(exp)+"' fill='none' stroke='var(--acc2)' stroke-width='2.2'/>"+
+    "<polyline points='"+pts(calc)+"' fill='none' stroke='var(--acc)' stroke-width='2.2' stroke-dasharray='"+(calibrated?"none":"7 4")+"' style='transition:all .6s'/>"+
+    "<rect x='"+(W-168)+"' y='14' width='154' height='40' rx='6' fill='#0e1f33'/>"+
+    "<line x1='"+(W-158)+"' y1='28' x2='"+(W-130)+"' y2='28' stroke='var(--acc2)' stroke-width='2.5'/><text x='"+(W-124)+"' y='31' font-size='10' fill='var(--txt)'>эксперимент (стенд)</text>"+
+    "<line x1='"+(W-158)+"' y1='44' x2='"+(W-130)+"' y2='44' stroke='var(--acc)' stroke-width='2.5'/><text x='"+(W-124)+"' y='47' font-size='10' fill='var(--txt)'>расчет (модель)</text>"+
+  "</svg>";
+}
+function renderValid(sc){
+  var st = S.ui.vd || (S.ui.vd = {resolved:false, calibrated:false});
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div style='padding:0 18px'>"+vchartSvg(st.calibrated)+"</div>";
+  html += "<div class='need'>"+esc(A5VALID.intro)+"</div>";
+  if(!st.resolved){
+    html += "<div class='step-title'>Инженерное решение</div><div id='vopts'>"+
+      A5VALID.options.map(function(o,k){
+        var c = o.cost && o.cost.weeks ? " <span style='color:var(--bad);font-size:11px'>(-"+o.cost.weeks+" нед)</span>" : "";
+        return "<div class='jopt' id='vopt"+k+"' onclick='G.validPick("+k+")'><span class='dot'></span>"+esc(o.t)+c+"</div>";
+      }).join("")+"</div>";
+  }
+  html += "<div class='verdict' id='verdict'"+(st.lastFb?" class='verdict show "+st.lastQ+"'":"")+"></div>";
+  html += "<div class='hint' id='hintbox'><b>Гарин:</b> "+esc(sc.hint||"")+"</div>";
+  shell(sc, html, hintBtnHtml() + nextBtnHtml("Продолжить", !!st.resolved));
+  if(st.lastFb){ var v=el("verdict"); v.className="verdict show "+st.lastQ; v.innerHTML=st.lastFb; }
+}
+function validPick(k){
+  var sc = STORY.scenes[S.scene], o = A5VALID.options[k];
+  var st = S.ui.vd;
+  document.querySelectorAll("#vopts .jopt").forEach(function(x){ x.classList.remove("good","weak","bad"); });
+  var eo = el("vopt"+k); if(eo) eo.classList.add(o.q);
+  if(o.cost && o.cost.weeks) applyFx({weeks:o.cost.weeks});
+  logEv("valid",{opt:o.id, q:o.q, hint:!!S.ui.hintUsed});
+  st.lastFb = "<b>Гарин:</b> "+esc(o.fb.replace(/^Гарин:\s*/,""));
+  st.lastQ = o.q;
+  if(!o.stay){
+    st.resolved = true;
+    st.calibrated = (o.id==="calib");
+    applyFx(o.q==="good" ? {adeq:12, trust:2} : {adeq:12});
+  }
+  save(); renderValid(sc); renderTop(sc); renderSide();
+}
+
 /* ---------- result: итог акта ---------- */
 function renderResult(sc){
   var a = null; ARTS.forEach(function(x){ if(x.id===sc.award.art) a=x; });
@@ -321,13 +514,25 @@ function render(){
   else if(sc.type==="choice") renderChoice(sc);
   else if(sc.type==="talks") renderTalks(sc);
   else if(sc.type==="matrix") renderMatrix(sc);
+  else if(sc.type==="tree") renderTree(sc);
+  else if(sc.type==="diag") renderDiag(sc);
+  else if(sc.type==="valid") renderValid(sc);
   else if(sc.type==="result") renderResult(sc);
   else if(sc.type==="end") renderEnd(sc);
   window.scrollTo(0,0);
 }
+function resolveNext(sc){
+  if(sc.nextIf){
+    for(var i=0;i<sc.nextIf.length;i++){
+      var c = sc.nextIf[i];
+      if(S.flags[c.flag]===c.eq) return c.next;
+    }
+  }
+  return sc.next;
+}
 function goNext(sc){
   S.ui = {};
-  S.scene = sc.next;
+  S.scene = resolveNext(sc);
   var nsc = STORY.scenes[S.scene];
   if(nsc.onenter){ applyFx(nsc.onenter); }
   if(nsc.type==="result" && nsc.award){ applyFx({art:nsc.award.art}); }
@@ -374,6 +579,9 @@ return {
     else if(sc.type==="choice"){ if(pickState && pickState.q) confirmChoice(sc); }
     else if(sc.type==="talks"){ if((S.ui.visited||[]).length>=sc.min){ logEv("talksDone",{n:S.ui.visited.length}); goNext(sc); } }
     else if(sc.type==="matrix") confirmMatrix(sc);
+    else if(sc.type==="tree") confirmTree(sc);
+    else if(sc.type==="diag"){ if(S.ui.dg && S.ui.dg.concluded) goNext(sc); }
+    else if(sc.type==="valid"){ if(S.ui.vd && S.ui.vd.resolved) goNext(sc); }
     else if(sc.type==="result") goNext(sc);
   },
   hint: function(){
@@ -387,6 +595,7 @@ return {
     el(elTab.getAttribute("data-pane")).classList.add("on");
   },
   pick: pick, just: just, talk: talk, slide: slide,
+  treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
   _state: function(){ return S; }  // для отладки
 };
 })();

@@ -93,6 +93,9 @@ body{
   .art-draw{stroke-dasharray:260; stroke-dashoffset:260; animation:artDraw 6s ease-out infinite;}
   .art-pulse{animation:artPulse 3.2s ease-in-out infinite;}
   .art-ring{animation:artRing 4.5s ease-in-out infinite;}
+  .art-shake{animation:artShake .14s linear infinite;}
+  .art-bars rect{transform-box:fill-box; transform-origin:50% 100%; animation:artBars 2.8s ease-in-out infinite;}
+  .art-wave{animation:artFlow 0.7s linear infinite;}
 }
 .art-cell{fill:rgba(90,209,138,.45);}
 @keyframes artFlicker{0%,88%,100%{opacity:.55} 92%,96%{opacity:.12}}
@@ -110,6 +113,8 @@ body{
 @keyframes artSlideA{0%,48%{opacity:1} 50%,100%{opacity:0}}
 @keyframes artSlideB{0%,48%{opacity:0} 50%,100%{opacity:1}}
 @keyframes artDraw{0%{stroke-dashoffset:260} 55%,100%{stroke-dashoffset:0}}
+@keyframes artShake{0%,100%{transform:translateY(0)} 25%{transform:translateY(-1.6px)} 75%{transform:translateY(1.4px)}}
+@keyframes artBars{0%,100%{transform:scaleY(.45)} 50%{transform:scaleY(1)}}
 @keyframes artPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(79,195,247,.25))} 50%{filter:drop-shadow(0 0 12px rgba(79,195,247,.6))}}
 @keyframes artRing{0%,100%{stroke-dashoffset:90} 50%{stroke-dashoffset:14}}
 
@@ -207,6 +212,25 @@ body{
 .ind.green .ib i{background:var(--ok);} .ind.red .ib i{background:var(--bad);}
 .mxstatus{margin:6px 18px 0; font-size:12.5px; color:var(--dim); padding:0 2px;}
 .mxstatus b{color:var(--txt);}
+
+/* ---------- дерево моделей (акт 3) ---------- */
+.tree{padding:4px 18px 0;}
+.tlevel h5{font-size:11.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.6px; margin:8px 0 8px;}
+.tnodes{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:9px;}
+.tnode{background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:10px 12px; cursor:pointer; transition:.18s;}
+.tnode:hover{border-color:var(--acc2); transform:translateY(-2px);}
+.tnode .tt{font-size:13px; font-weight:700;}
+.tnode .tn{font-size:11px; color:var(--faint); margin-top:4px;}
+.tnode.on{border-color:var(--acc); background:linear-gradient(135deg, rgba(255,159,67,.13), rgba(79,195,247,.06));
+  box-shadow:0 0 14px rgba(255,159,67,.18);}
+.tnode.on .tn{color:var(--ok); font-weight:700;}
+.tlink{text-align:center; font-size:10.5px; color:var(--faint); padding:7px 0 2px;}
+
+/* ---------- диагностика (акт 4) ---------- */
+.findings{margin:12px 18px 0; display:flex; flex-direction:column; gap:7px;}
+.find{background:var(--bg2); border:1px solid var(--line); border-left:3px solid var(--acc2);
+  border-radius:9px; padding:9px 12px; font-size:12.5px; color:var(--dim); line-height:1.55; animation:fadein .35s;}
+.find b{color:var(--txt);}
 
 /* ---------- итог / артефакт ---------- */
 .award{margin:14px 18px 0; background:linear-gradient(135deg, rgba(255,159,67,.12), rgba(79,195,247,.07));

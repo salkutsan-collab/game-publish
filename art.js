@@ -10,7 +10,7 @@ var ART = (function(){
 
 /* ---------- общие детали ---------- */
 
-/* силуэт сидящего человека (голова + корпус), цвет тёмный */
+/* силуэт сидящего человека (голова + корпус), цвет темный */
 function sit(x, y, scale, sway){
   return "<g transform='translate("+x+","+y+") scale("+(scale||1)+")' class='"+(sway?"art-sway":"")+"'>"+
     "<circle cx='0' cy='-26' r='7.5' fill='#0a111d'/>"+
@@ -266,6 +266,63 @@ function fab(){
   );
 }
 
+/* Вычислительный центр: ряды стоек, экран загрузки кластера, админ */
+function hpccenter(){
+  var racks = "";
+  for(var rrow=0; rrow<4; rrow++){
+    var rx = 60 + rrow*68;
+    racks += "<g transform='translate("+rx+",48)'><rect x='0' y='0' width='44' height='104' rx='3' fill='#0e1a2c' stroke='var(--line)'/>";
+    for(var k=0;k<7;k++){
+      racks += "<rect x='5' y='"+(6+k*14)+"' width='34' height='9' rx='2' fill='#101d31'/>"+
+        "<circle cx='33' cy='"+(10.5+k*14)+"' r='1.9' fill='var(--ok)' class='art-flicker' style='animation-delay:"+((rrow*1.3+k*0.8)%5).toFixed(1)+"s'/>"+
+        "<circle cx='27' cy='"+(10.5+k*14)+"' r='1.9' fill='var(--acc2)' class='art-flicker' style='animation-delay:"+((rrow*2.1+k*1.1)%6).toFixed(1)+"s'/>";
+    }
+    racks += "</g>";
+  }
+  /* экран загрузки кластера: прыгающие столбики */
+  var bars = "";
+  for(var b=0;b<8;b++){
+    bars += "<rect x='"+(14+b*22)+"' y='22' width='14' height='58' rx='2' fill='var(--acc2)' opacity='.65' style='animation-delay:"+(b*0.35)+"s'/>";
+  }
+  return wrap(
+    lamp(200, 56, false) + lamp(520, 56, false) +
+    racks +
+    "<g transform='translate(420,36)'><rect x='0' y='0' width='200' height='96' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
+    "<text x='14' y='16' font-size='9.5' fill='var(--dim)' font-family='Segoe UI'>ЗАГРУЗКА КЛАСТЕРА · ядро-часы</text>"+
+    "<g class='art-bars'>"+bars+"</g></g>"+
+    stand(680, 152, 1.05, true) + sit(560, 152, 1.0, false) +
+    floor()
+  );
+}
+
+/* Испытательная лаборатория: вибростенд с лопаткой (трясется), осциллограф */
+function lab(){
+  return wrap(
+    lamp(180, 54, false) + lamp(540, 54, false) +
+    /* вибростенд: станина + вибростол + лопатка */
+    "<g transform='translate(180,84)'>"+
+      "<rect x='-10' y='44' width='150' height='14' rx='3' fill='#101b2d'/>"+ /* станина */
+      "<rect x='8' y='30' width='114' height='14' rx='3' fill='#152238' stroke='var(--line)'/>"+ /* корпус вибратора */
+      "<g class='art-shake'>"+
+        "<rect x='28' y='18' width='74' height='12' rx='2' fill='#1b2a44' stroke='var(--acc2)' stroke-opacity='.5'/>"+ /* стол */
+        "<path d='M 60 18 L 56 -18 Q 65 -26 74 -18 L 70 18 Z' fill='var(--acc2)' opacity='.85'/>"+ /* лопатка */
+      "</g>"+
+      "<circle cx='18' cy='37' r='3' fill='var(--ok)' class='art-flicker'/>"+
+    "</g>"+
+    /* осциллограф: бегущая волна */
+    "<g transform='translate(420,40)'>"+
+      "<rect x='0' y='0' width='190' height='92' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
+      "<text x='12' y='15' font-size='9.5' fill='var(--dim)' font-family='Segoe UI'>ОТКЛИК · АЧХ лопатки</text>"+
+      "<path d='M 10 58 Q 22 30 34 58 Q 46 86 58 58 Q 70 26 82 58 Q 94 90 106 58 Q 118 34 130 58 Q 142 82 154 58 Q 166 38 178 58' fill='none' stroke='var(--ok)' stroke-width='1.8' stroke-dasharray='6 4' class='art-wave'/>"+
+      "<line x1='10' y1='58' x2='180' y2='58' stroke='var(--line)' stroke-dasharray='2 4'/>"+
+    "</g>"+
+    /* испытатель у стенда + расчетчик с ноутбуком */
+    stand(348, 152, 1.08, true) + sit(660, 152, 1.0, true) +
+    "<rect x='630' y='138' width='80' height='5' rx='2' fill='#152238'/>"+
+    floor()
+  );
+}
+
 /* ---------- карта «локация -> сцена» ---------- */
 var BYLOC = {
   "Кабинет директора": director,
@@ -275,6 +332,8 @@ var BYLOC = {
   "Переговорная": meeting,
   "Кабинет руководителя проекта": office,
   "Рабочий стол инженера": desk,
+  "Вычислительный центр": hpccenter,
+  "Испытательная лаборатория": lab,
   "Фабрика цифровых двойников": fab
 };
 
