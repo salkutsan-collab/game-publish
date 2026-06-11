@@ -24,8 +24,30 @@ function freshState(name){
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
 function load(){
   try{ var raw = localStorage.getItem(SAVE_KEY); if(!raw) return null;
-    var s = JSON.parse(raw); return (s && s.v===1 && STORY.scenes[s.scene]) ? s : null;
+    var s = JSON.parse(raw); if(!s || s.v!==1) return null;
+    /* сейв из старой версии: сцены может уже не быть - возвращаем игрока
+       на вход достигнутого акта, ресурсы и прогресс сохраняются */
+    if(!STORY.scenes[s.scene]){
+      var ai = s.maxActId ? actIdx(s.maxActId) : 0;
+      if(ai<0) ai = 0;
+      s.scene = ACTS[ai].entry; s.ui = {};
+    }
+    return s;
   }catch(e){ return null; }
+}
+/* ---------- акты: индексация и навигация ---------- */
+function actIdx(id){ for(var i=0;i<ACTS.length;i++) if(ACTS[i].id===id) return i; return -1; }
+function sceneActId(sceneId){
+  if(sceneId==="sliceEnd") return "end";
+  var best = null;
+  ACTS.forEach(function(a){
+    if(a.id!=="end" && sceneId.indexOf(a.id)===0 && (!best || a.id.length>best.length)) best = a.id;
+  });
+  return best || "p";
+}
+function touchAct(){
+  var cur = sceneActId(S.scene);
+  if(!S.maxActId || actIdx(cur) > actIdx(S.maxActId)) S.maxActId = cur;
 }
 function logEv(type, data){
   var e = { t:Date.now(), scene:S.scene, type:type };
@@ -113,6 +135,17 @@ function renderSide(){
     ? S.gloss.map(function(k){ var g=GLOSS[k]; return "<div class='gl-item'><div class='t'>"+esc(g.t)+"</div><div class='d'>"+esc(g.d)+"</div></div>"; }).join("")
     : "<div class='counter'>Пока пусто. Термины открываются по ходу сюжета.</div>")
     + "<div class='counter'>Открыто терминов: <b>"+S.gloss.length+"</b> из "+keys.length+" (в срезе)</div>";
+
+  /* панель «Акты»: переходы по достигнутым актам */
+  var curAct = sceneActId(S.scene), maxI = actIdx(S.maxActId||"p");
+  el("p-acts").innerHTML = "<h3>Акты · переходы</h3>" + ACTS.map(function(a,i){
+    var here = a.id===curAct, open = i<=maxI;
+    var right = here ? "<span class='tag rent'>вы здесь</span>"
+      : open ? "<span class='tag have' style='cursor:pointer' onclick=\"G.gotoAct('"+a.id+"')\">перейти</span>"
+      : "<span class='tag no'>впереди</span>";
+    return "<div class='tech'"+(here?" style='border-color:var(--acc)'":"")+">"+esc(a.t)+" "+right+"</div>";
+  }).join("") +
+  "<div class='counter'>Достигнутые акты можно открыть заново - например, чтобы продолжить с нового места после обновления игры. Ресурсы при переходе сохраняются как есть.</div>";
 }
 
 /* ---------- сцена: каркас ---------- */
@@ -509,6 +542,7 @@ function renderEnd(sc){
 /* ---------- роутер ---------- */
 function render(){
   var sc = STORY.scenes[S.scene];
+  touchAct();
   renderTop(sc); renderSide();
   if(sc.type==="dialog") renderDialog(sc);
   else if(sc.type==="choice") renderChoice(sc);
@@ -596,6 +630,13 @@ return {
   },
   pick: pick, just: just, talk: talk, slide: slide,
   treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
+  gotoAct: function(id){
+    var i = actIdx(id);
+    if(i<0 || i>actIdx(S.maxActId||"p")) return;
+    S.ui = {}; S.scene = ACTS[i].entry;
+    logEv("gotoAct",{act:id});
+    save(); render();
+  },
   _state: function(){ return S; }  // для отладки
 };
 })();
