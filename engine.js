@@ -108,8 +108,10 @@ function renderSide(){
 
 /* ---------- сцена: каркас ---------- */
 function shell(sc, inner, foot){
+  var art = (typeof ART!=="undefined") ? ART.forLoc(sc.loc) : null;
   el("scene").innerHTML =
-    "<div class='scene-art'><div class='ph'>фон локации - арт (внешнее приложение)</div>"+
+    "<div class='scene-art'>"+
+    (art ? art : "<div class='ph'>фон локации - арт</div>")+
     "<div class='loc'>Локация<b>"+esc(sc.loc||"")+"</b></div></div>" + inner +
     "<div class='scene-foot'>"+(foot||"")+"</div>";
 }

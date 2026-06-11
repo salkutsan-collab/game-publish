@@ -56,7 +56,7 @@ body{
 
 /* ---------- сцена ---------- */
 .scene{background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden;}
-.scene-art{height:120px; position:relative; display:flex; align-items:flex-end; padding:14px 18px;
+.scene-art{height:150px; position:relative; display:flex; align-items:flex-end; padding:14px 18px;
   background:linear-gradient(180deg,#14223a 0%,#0e1828 100%);}
 .scene-art::before{content:""; position:absolute; inset:0;
   background-image:radial-gradient(ellipse at 75% 30%, rgba(255,159,67,.15), transparent 55%),
@@ -65,8 +65,53 @@ body{
   background-size:auto, 28px 28px, 28px 28px;}
 .scene-art .ph{position:absolute; right:18px; top:14px; font-size:10.5px; color:var(--faint);
   border:1px dashed var(--faint); border-radius:8px; padding:3px 9px;}
-.loc{position:relative; font-size:11px; color:var(--dim); letter-spacing:.5px; text-transform:uppercase;}
+.artsvg{position:absolute; inset:0; width:100%; height:100%;}
+.scene-art::after{content:""; position:absolute; left:0; right:0; bottom:0; height:64px;
+  background:linear-gradient(180deg, transparent, rgba(10,16,28,.78)); pointer-events:none;}
+.loc{position:relative; z-index:2; font-size:11px; color:var(--dim); letter-spacing:.5px; text-transform:uppercase;
+  text-shadow:0 1px 6px rgba(8,12,22,.9);}
 .loc b{display:block; font-size:17px; color:var(--txt); letter-spacing:0; text-transform:none;}
+
+/* ---------- живые сцены локаций (art.js) ---------- */
+@media (prefers-reduced-motion: no-preference){
+  .art-flicker{animation:artFlicker 4.5s infinite;}
+  .art-lampflicker{animation:artLamp 6s infinite;}
+  .art-glow{animation:artGlow 3.5s infinite;}
+  .art-rotate{transform-box:fill-box; transform-origin:center; animation:artRotate 2.2s linear infinite;}
+  .art-rotate-slow{transform-box:fill-box; transform-origin:center; animation:artRotate 5s linear infinite;}
+  .art-flow{animation:artFlow 1.2s linear infinite;}
+  .art-sway{transform-box:fill-box; transform-origin:50% 100%; animation:artSway 5.5s ease-in-out infinite;}
+  .art-gesture{transform-box:fill-box; transform-origin:0% 50%; animation:artGesture 2.8s ease-in-out infinite;}
+  .art-walk{animation:artWalk 14s linear infinite;}
+  .art-cursor{animation:artCursor 1.1s steps(1) infinite;}
+  .art-steam{animation:artSteam 2.6s ease-in-out infinite; opacity:0;}
+  .art-knob{animation:artKnob 5.6s ease-in-out infinite;}
+  .art-cell{animation:artCell 7s steps(1) infinite;}
+  .art-slideA{animation:artSlideA 8s steps(1) infinite;}
+  .art-slideB{animation:artSlideB 8s steps(1) infinite;}
+  .art-beam{animation:artGlow 4s infinite;}
+  .art-draw{stroke-dasharray:260; stroke-dashoffset:260; animation:artDraw 6s ease-out infinite;}
+  .art-pulse{animation:artPulse 3.2s ease-in-out infinite;}
+  .art-ring{animation:artRing 4.5s ease-in-out infinite;}
+}
+.art-cell{fill:rgba(90,209,138,.45);}
+@keyframes artFlicker{0%,88%,100%{opacity:.55} 92%,96%{opacity:.12}}
+@keyframes artLamp{0%,86%,90%,100%{opacity:1} 88%,92%{opacity:.35}}
+@keyframes artGlow{0%,100%{opacity:.55} 50%{opacity:1}}
+@keyframes artRotate{to{transform:rotate(360deg)}}
+@keyframes artFlow{to{stroke-dashoffset:-16}}
+@keyframes artSway{0%,100%{transform:rotate(0deg)} 50%{transform:rotate(2.2deg)}}
+@keyframes artGesture{0%,100%{transform:rotate(8deg)} 45%{transform:rotate(-26deg)} 65%{transform:rotate(-10deg)}}
+@keyframes artWalk{0%{transform:translateX(-60px)} 100%{transform:translateX(880px)}}
+@keyframes artCursor{0%,49%{opacity:1} 50%,100%{opacity:0}}
+@keyframes artSteam{0%{opacity:0; transform:translateY(3px)} 35%{opacity:.7} 100%{opacity:0; transform:translateY(-7px)}}
+@keyframes artKnob{0%,100%{transform:translateX(0)} 50%{transform:translateX(26px)}}
+@keyframes artCell{0%,100%{fill:rgba(90,209,138,.45)} 40%,70%{fill:rgba(255,117,117,.45)}}
+@keyframes artSlideA{0%,48%{opacity:1} 50%,100%{opacity:0}}
+@keyframes artSlideB{0%,48%{opacity:0} 50%,100%{opacity:1}}
+@keyframes artDraw{0%{stroke-dashoffset:260} 55%,100%{stroke-dashoffset:0}}
+@keyframes artPulse{0%,100%{filter:drop-shadow(0 0 2px rgba(79,195,247,.25))} 50%{filter:drop-shadow(0 0 12px rgba(79,195,247,.6))}}
+@keyframes artRing{0%,100%{stroke-dashoffset:90} 50%{stroke-dashoffset:14}}
 
 .dialog{padding:16px 18px 4px;}
 .say{display:flex; gap:11px; margin-bottom:11px; animation:fadein .35s;}
