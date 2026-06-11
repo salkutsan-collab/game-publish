@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Путь двойника</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- экран входа -->
+<div id="login" class="login hidden">
+  <div class="login-card">
+    <div class="login-logo">ПУТЬ <span>ДВОЙНИКА</span></div>
+    <div class="login-sub">Игра-симуляция: постройте цифровой двойник изделия -<br>от постановки задачи до полномасштабной эксплуатации</div>
+    <div class="login-izd">Изделие: <b>авиадвигатель (ГТД)</b> · срез: пролог + акты 1-2 из 10</div>
+    <div id="login-new">
+      <input id="pname" type="text" maxlength="30" placeholder="Ваше имя" autocomplete="off">
+      <button class="btn acc" onclick="G.start()">Начать проект</button>
+    </div>
+    <div id="login-cont" class="hidden">
+      <button class="btn acc" id="contbtn" onclick="G.cont()">Продолжить</button>
+      <button class="btn ghost" onclick="G.restartConfirm()">Начать заново</button>
+    </div>
+  </div>
+</div>
+
+<!-- игра -->
+<div id="game" class="wrap hidden">
+  <div class="top">
+    <div class="logo">ПУТЬ <span>ДВОЙНИКА</span></div>
+    <div class="act" id="actlabel">Пролог<br>Изделие: авиадвигатель (ГТД)</div>
+    <div class="res" id="resbar"></div>
+  </div>
+
+  <div class="grid">
+    <div class="scene" id="scene"></div>
+
+    <div class="side">
+      <div class="tabs">
+        <div class="tab on" data-pane="p-tech" onclick="G.tab(this)">Предприятие</div>
+        <div class="tab" data-pane="p-art" onclick="G.tab(this)">Папка</div>
+        <div class="tab" data-pane="p-cal" onclick="G.tab(this)">Календарь</div>
+        <div class="tab" data-pane="p-gloss" onclick="G.tab(this)">Справочник</div>
+      </div>
+      <div class="pane on" id="p-tech"></div>
+      <div class="pane" id="p-art"></div>
+      <div class="pane" id="p-cal"></div>
+      <div class="pane" id="p-gloss"></div>
+    </div>
+  </div>
+
+  <div class="foot">«Путь двойника» · вертикальный срез · прогресс сохраняется автоматически - можно закрыть и вернуться</div>
+</div>
+
+<script src="story.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
