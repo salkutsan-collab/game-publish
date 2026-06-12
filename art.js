@@ -323,6 +323,31 @@ function lab(){
   );
 }
 
+/* Центр виртуальных испытаний: стена экранов с бегущими испытаниями, счетчик */
+function testcenter(){
+  var screens = "";
+  for(var r=0;r<2;r++) for(var c=0;c<5;c++){
+    var x = 56+c*92, y = 30+r*56, d = ((r*5+c)*0.7)%4;
+    screens += "<g transform='translate("+x+","+y+")'>"+
+      "<rect x='0' y='0' width='80' height='46' rx='3' fill='#0c1626' stroke='var(--line)'/>"+
+      "<polyline points='6,38 18,"+(14+((r+c)%3)*8)+" 30,"+(30-((c*3)%12))+" 42,"+(12+((r*c)%14))+" 54,"+(28-((c+r)%10))+" 66,"+(16+((c*2)%10))+" 74,24' "+
+        "fill='none' stroke='"+((r+c)%3===0?"var(--acc)":"var(--acc2)")+"' stroke-width='1.5' opacity='.8' class='art-draw' style='animation-delay:"+d.toFixed(1)+"s'/>"+
+      "<circle cx='73' cy='7' r='2' fill='var(--ok)' class='art-flicker' style='animation-delay:"+((r*3+c)%5)+"s'/>"+
+    "</g>";
+  }
+  return wrap(
+    lamp(220, 56, false) + lamp(560, 56, false) +
+    screens +
+    /* табло счетчика испытаний */
+    "<g transform='translate(560,36)'><rect x='0' y='0' width='180' height='96' rx='5' fill='#0c1626' stroke='var(--acc2)' stroke-opacity='.45'/>"+
+    "<text x='14' y='20' font-size='10' fill='var(--dim)' font-family='Segoe UI'>ИСПЫТАНИЙ ВЫПОЛНЕНО</text>"+
+    "<text x='14' y='56' font-size='30' fill='var(--acc2)' font-family='Segoe UI' font-weight='700' class='art-glow'>4 184</text>"+
+    "<text x='14' y='80' font-size='9.5' fill='var(--ok)' font-family='Segoe UI'>стенды и полигон · работа 24/7</text></g>"+
+    sit(180, 152, 1.0, true) + sit(330, 152, 1.0, false) + stand(480, 154, 1.05, true) +
+    floor()
+  );
+}
+
 /* ---------- карта «локация -> сцена» ---------- */
 var BYLOC = {
   "Кабинет директора": director,
@@ -334,6 +359,7 @@ var BYLOC = {
   "Рабочий стол инженера": desk,
   "Вычислительный центр": hpccenter,
   "Испытательная лаборатория": lab,
+  "Центр виртуальных испытаний": testcenter,
   "Фабрика цифровых двойников": fab
 };
 

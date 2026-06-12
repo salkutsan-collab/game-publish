@@ -32,6 +32,15 @@ function load(){
       if(ai<0) ai = 0;
       s.scene = ACTS[ai].entry; s.ui = {};
     }
+    /* миграция: новые позиции карты технологий для старых сейвов */
+    TECH0.forEach(function(t0){
+      var has = s.tech.some(function(t){ return t.id===t0.id; });
+      if(!has) s.tech.push({ id:t0.id, st:t0.st });
+    });
+    /* миграция: флаги для отложенных последствий, выводим из текстов defers */
+    s.flags = s.flags || {};
+    if(s.flags.matrixReds===undefined && (s.defers||[]).some(function(d){ return d.indexOf("красных ячеек матрицы")>=0; })) s.flags.matrixReds = true;
+    if(s.flags.gas===undefined && (s.defers||[]).some(function(d){ return d.indexOf("испытания встанут")>=0; })) s.flags.gas = "none";
     return s;
   }catch(e){ return null; }
 }
@@ -67,6 +76,7 @@ function applyFx(fx){
   if(fx.art && S.arts.indexOf(fx.art)<0) S.arts.push(fx.art);
   if(fx.flag)   for(var k in fx.flag) S.flags[k]=fx.flag[k];
   if(fx.tech)   for(var k in fx.tech) S.tech.forEach(function(t){ if(t.id===k) t.st=fx.tech[k]; });
+  if(fx.spendCores) spendCores(fx.spendCores);
   if(fx.defer){ S.defers.push(fx.defer); logEv("defer",{text:fx.defer}); }
 }
 /* списать ядро-часы; если своих нет (аутсорс) - платим подрядчику деньгами */
@@ -316,55 +326,138 @@ function confirmMatrix(sc){
   }
   applyFx(sc.cost ? {weeks:sc.cost.weeks, budget:sc.cost.budget} : null);
   if(all){ applyFx({adeq:6, trust:4}); }
-  else { applyFx({trust:-5, defer:"Акт 6: "+(MATRIX.inds.length-green)+" красных ячеек матрицы всплывут на виртуальных испытаниях"}); }
+  else { applyFx({trust:-5, flag:{matrixReds:true}, defer:"Акт 6: "+(MATRIX.inds.length-green)+" красных ячеек матрицы всплывут на виртуальных испытаниях"}); }
   logEv("matrix", { green:green, total:MATRIX.inds.length, moves:S.ui.moves||0, hint:!!S.ui.hintUsed, sliders:mxVals() });
   goNext(sc);
 }
 
-/* ---------- tree: сборка системы моделей (акт 3) ---------- */
-function treeCount(){
+/* ---------- tree: интерактивная сборка по узлам (акты 3 и 7) ---------- */
+function treeCfg(sc){ return TREES[sc.tree || "a3"]; }
+function treeCount(cfg){
   var done = S.ui.tdone || [];
-  var n = A3TREE.start;
-  A3TREE.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(done.indexOf(nd.id)>=0) n += nd.n; }); });
+  var n = cfg.start;
+  cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(done.indexOf(nd.id)>=0) n += nd.n; }); });
   return n;
 }
 function renderTree(sc){
+  var cfg = treeCfg(sc);
   var done = S.ui.tdone || [];
-  var total = 0; A3TREE.levels.forEach(function(lv){ total += lv.nodes.length; });
+  var total = 0; cfg.levels.forEach(function(lv){ total += lv.nodes.length; });
   var html = "<div class='task'>"+sub(sc.task)+"</div><div class='tree'>";
-  A3TREE.levels.forEach(function(lv, li){
+  cfg.levels.forEach(function(lv, li){
     html += "<div class='tlevel'><h5>"+esc(lv.t)+"</h5><div class='tnodes'>";
     lv.nodes.forEach(function(nd){
       var on = done.indexOf(nd.id)>=0;
+      var onLabel = (cfg.label ? "подключено" : "+"+nd.n+" моделей");
+      var offLabel = (cfg.label ? "подключить" : "запустить разработку");
       html += "<div class='tnode"+(on?" on":"")+"' onclick=\"G.treeNode('"+nd.id+"')\">"+
-        "<div class='tt'>"+esc(nd.t)+"</div><div class='tn'>"+(on?"+"+nd.n+" моделей":"запустить разработку")+"</div></div>";
+        "<div class='tt'>"+esc(nd.t)+"</div><div class='tn'>"+(on?onLabel:offLabel)+"</div></div>";
     });
     html += "</div></div>";
-    if(li < A3TREE.levels.length-1) html += "<div class='tlink'>↓ результаты уровня питают следующий ↓</div>";
+    if(li < cfg.levels.length-1) html += "<div class='tlink'>↓ результаты уровня питают следующий ↓</div>";
   });
   html += "</div>";
   html += "<div class='adv-say show' id='treeinfo' style='"+(S.ui.tinfo?"":"display:none")+"'>"+(S.ui.tinfo||"")+"</div>";
-  var cnt = treeCount(), allDone = done.length===total;
-  html += "<div class='mxstatus'>Моделей в системе: <b style='font-size:16px;color:var(--acc2)'>"+cnt+"</b> из "+A3TREE.target+
-    (allDone ? " - <span style='color:var(--ok)'>система собрана</span>" : "") + "</div>";
-  if(allDone) html += "<div class='verdict show good'><b>Гарин:</b> "+esc(A3TREE.done)+"</div>";
+  var cnt = treeCount(cfg), allDone = done.length===total;
+  html += "<div class='mxstatus'>"+esc(cfg.label||"Моделей в системе")+": <b style='font-size:16px;color:var(--acc2)'>"+cnt+"</b> из "+cfg.target+
+    (allDone ? " - <span style='color:var(--ok)'>готово</span>" : "") + "</div>";
+  if(allDone) html += "<div class='verdict show good'><b>Гарин:</b> "+esc(cfg.done)+"</div>";
   shell(sc, html, nextBtnHtml("Готово", allDone));
 }
 function treeNode(id){
-  var sc = STORY.scenes[S.scene];
+  var sc = STORY.scenes[S.scene], cfg = treeCfg(sc);
   S.ui.tdone = S.ui.tdone || [];
   var node = null;
-  A3TREE.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(nd.id===id) node=nd; }); });
+  cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(nd.id===id) node=nd; }); });
   if(S.ui.tdone.indexOf(id)<0){ S.ui.tdone.push(id); logEv("tree",{node:id}); }
   S.ui.tinfo = "<b>"+esc(node.t)+":</b> "+esc(node.info);
   save(); renderTree(sc);
 }
 function confirmTree(sc){
-  var total = 0; A3TREE.levels.forEach(function(lv){ total += lv.nodes.length; });
+  var cfg = treeCfg(sc);
+  var total = 0; cfg.levels.forEach(function(lv){ total += lv.nodes.length; });
   if((S.ui.tdone||[]).length!==total) return;
   if(sc.cost) applyFx({weeks:sc.cost.weeks||0, budget:sc.cost.budget||0});
-  logEv("treeDone",{models:treeCount()});
+  logEv("treeDone",{count:treeCount(cfg)});
   goNext(sc);
+}
+
+/* ---------- camp: кампания виртуальных испытаний (акт 6) ---------- */
+function renderCamp(sc){
+  var st = S.ui.cp || (S.ui.cp = { sel:{}, runs:0, done:false, shown:0 });
+  var noPoly = !!S.flags.noPoly;
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(A6CAMP.intro)+(noPoly?" <b style='color:var(--bad)'>Полигона нет - полигонные задачи выполнить не получится.</b>":"")+"</div>";
+  html += "<div class='camp'>";
+  A6CAMP.tasks.forEach(function(tk,i){
+    var sel = st.sel[i];
+    var wrongNow = st.wrong && st.wrong.indexOf(i)>=0;
+    var skipped = noPoly && tk.right==="poly";
+    html += "<div class='crow"+(wrongNow?" wrong":"")+(skipped?" skip":"")+"'>"+
+      "<div class='ct'>"+esc(tk.t)+(wrongNow?"<div class='cwhy'>"+esc(tk.why)+"</div>":"")+"</div>"+
+      (skipped
+        ? "<div class='cbtns'><span class='tag no'>нет полигона - пропуск</span></div>"
+        : "<div class='cbtns'>"+
+          "<button class='cbtn"+(sel==="stand"?" on":"")+"' onclick='G.campSel("+i+",\"stand\")'>🔬 Стенд</button>"+
+          "<button class='cbtn"+(sel==="poly"?" on":"")+"' onclick='G.campSel("+i+",\"poly\")'>🏟️ Полигон</button></div>")+
+      "</div>";
+  });
+  html += "</div>";
+  if(st.done){
+    html += "<div class='bigcount'>Выполнено испытаний: <b id='ccount'>"+(st.shown||0)+"</b><div class='cmx'>матрица требований заполняется результатами</div></div>";
+    html += "<div class='verdict show good'><b>Гарин:</b> кампания прошла. "+(noPoly?"Без полигона часть ячеек осталась пустой - это мы еще вспомним. ":"")+"Каждая зеленая ячейка матрицы теперь подтверждена не мнением, а испытаниями.</div>";
+  } else if(st.runs>0 && st.wrong && st.wrong.length){
+    html += "<div class='verdict show weak'><b>Гарин:</b> "+st.wrong.length+" "+(st.wrong.length===1?"кампания спланирована":"кампании спланированы")+" не на ту установку - неделя и тридцать тысяч ядро-часов впустую. Смотри подсказки на красных строках, переназначь и запускай заново.</div>";
+  }
+  html += "<div class='hint' id='hintbox'><b>Гарин:</b> "+esc(A6CAMP.hint)+"</div>";
+  var assignable = A6CAMP.tasks.filter(function(tk){ return !(noPoly && tk.right==="poly"); }).length;
+  var allSel = Object.keys(st.sel).length >= assignable;
+  var foot = st.done
+    ? nextBtnHtml("Продолжить", true)
+    : hintBtnHtml() + "<button class='nextbtn"+(allSel?" ready":"")+"' id='nextbtn' onclick='G.campLaunch()'>🚀 Запустить кампанию</button>";
+  shell(sc, html, foot);
+}
+function campSel(i, v){
+  var st = S.ui.cp; if(st.done) return;
+  st.sel[i] = v;
+  if(st.wrong){ var ix = st.wrong.indexOf(i); if(ix>=0) st.wrong.splice(ix,1); }
+  save(); renderCamp(STORY.scenes[S.scene]);
+}
+function campLaunch(){
+  var sc = STORY.scenes[S.scene], st = S.ui.cp;
+  if(st.done) return;
+  var noPoly = !!S.flags.noPoly;
+  var assignable = A6CAMP.tasks.filter(function(tk){ return !(noPoly && tk.right==="poly"); }).length;
+  if(Object.keys(st.sel).length < assignable) return;
+  st.runs++;
+  if(st.runs===1){ applyFx({weeks:A6CAMP.launchCost.weeks}); spendCores(A6CAMP.launchCost.cores); }
+  var wrong = [];
+  A6CAMP.tasks.forEach(function(tk,i){
+    if(noPoly && tk.right==="poly") return;
+    if(st.sel[i] !== tk.right) wrong.push(i);
+  });
+  if(wrong.length){
+    st.wrong = wrong;
+    applyFx({weeks:A6CAMP.failCost.weeks}); spendCores(A6CAMP.failCost.cores);
+    logEv("camp",{run:st.runs, wrong:wrong.length});
+    save(); renderCamp(sc); renderTop(sc); renderSide();
+    return;
+  }
+  st.done = true; st.wrong = null;
+  var total = noPoly ? Math.round(A6CAMP.total*0.62) : A6CAMP.total;
+  st.total = total;
+  applyFx(noPoly ? {adeq:12, trust:2} : {adeq:20, trust:4});
+  logEv("camp",{run:st.runs, done:true, tests:total, hint:!!S.ui.hintUsed});
+  save(); renderCamp(sc); renderTop(sc); renderSide();
+  /* анимация счетчика испытаний */
+  var elc = el("ccount"), cur = 0, step = Math.max(7, Math.round(total/120));
+  var iv = setInterval(function(){
+    cur += step;
+    if(cur >= total){ cur = total; clearInterval(iv); }
+    st.shown = cur;
+    if(elc && document.body.contains(elc)) elc.textContent = cur.toLocaleString("ru-RU");
+    else clearInterval(iv);
+  }, 24);
 }
 
 /* ---------- diag: диагностика расчета (акт 4, верификация) ---------- */
@@ -549,6 +642,7 @@ function render(){
   else if(sc.type==="talks") renderTalks(sc);
   else if(sc.type==="matrix") renderMatrix(sc);
   else if(sc.type==="tree") renderTree(sc);
+  else if(sc.type==="camp") renderCamp(sc);
   else if(sc.type==="diag") renderDiag(sc);
   else if(sc.type==="valid") renderValid(sc);
   else if(sc.type==="result") renderResult(sc);
@@ -614,6 +708,7 @@ return {
     else if(sc.type==="talks"){ if((S.ui.visited||[]).length>=sc.min){ logEv("talksDone",{n:S.ui.visited.length}); goNext(sc); } }
     else if(sc.type==="matrix") confirmMatrix(sc);
     else if(sc.type==="tree") confirmTree(sc);
+    else if(sc.type==="camp"){ if(S.ui.cp && S.ui.cp.done) goNext(sc); }
     else if(sc.type==="diag"){ if(S.ui.dg && S.ui.dg.concluded) goNext(sc); }
     else if(sc.type==="valid"){ if(S.ui.vd && S.ui.vd.resolved) goNext(sc); }
     else if(sc.type==="result") goNext(sc);
@@ -630,6 +725,7 @@ return {
   },
   pick: pick, just: just, talk: talk, slide: slide,
   treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
+  campSel: campSel, campLaunch: campLaunch,
   gotoAct: function(id){
     var i = actIdx(id);
     if(i<0 || i>actIdx(S.maxActId||"p")) return;

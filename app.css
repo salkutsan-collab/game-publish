@@ -184,6 +184,7 @@ body{
   border-radius:10px; padding:10px 14px; font-size:13px; color:var(--dim); line-height:1.55;}
 .hint.show{display:block; animation:fadein .3s;}
 .hint b{color:var(--acc);}
+.task a, .hint a{color:var(--acc2);}
 
 .scene-foot{display:flex; align-items:center; gap:12px; padding:14px 18px 16px; flex-wrap:wrap;}
 .hintbtn{background:none; border:1px solid var(--acc); color:var(--acc); border-radius:10px;
@@ -225,6 +226,24 @@ body{
   box-shadow:0 0 14px rgba(255,159,67,.18);}
 .tnode.on .tn{color:var(--ok); font-weight:700;}
 .tlink{text-align:center; font-size:10.5px; color:var(--faint); padding:7px 0 2px;}
+
+/* ---------- кампания испытаний (акт 6) ---------- */
+.camp{padding:4px 18px 0; display:flex; flex-direction:column; gap:8px;}
+.crow{display:flex; align-items:center; gap:12px; justify-content:space-between;
+  background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:9px 13px;}
+.crow.wrong{border-color:rgba(255,117,117,.6); background:rgba(255,117,117,.05);}
+.crow.skip{opacity:.45;}
+.crow .ct{font-size:13px; line-height:1.4;}
+.crow .cwhy{font-size:11.5px; color:var(--warn); margin-top:4px;}
+.cbtns{display:flex; gap:7px; flex:none;}
+.cbtn{background:var(--bg2); border:1px solid var(--line); color:var(--dim); border-radius:9px;
+  padding:7px 12px; font-size:12px; cursor:pointer; font-family:inherit; white-space:nowrap; transition:.15s;}
+.cbtn:hover{border-color:var(--acc2); color:var(--txt);}
+.cbtn.on{background:rgba(255,159,67,.13); border-color:var(--acc); color:var(--txt); font-weight:700;}
+.bigcount{margin:12px 18px 0; background:linear-gradient(135deg, rgba(79,195,247,.1), rgba(255,159,67,.07));
+  border:1px solid rgba(79,195,247,.4); border-radius:13px; padding:14px 18px; font-size:14px;}
+.bigcount b{font-size:26px; color:var(--acc2); font-variant-numeric:tabular-nums;}
+.bigcount .cmx{font-size:11.5px; color:var(--dim); margin-top:4px;}
 
 /* ---------- диагностика (акт 4) ---------- */
 .findings{margin:12px 18px 0; display:flex; flex-direction:column; gap:7px;}
