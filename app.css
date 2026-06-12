@@ -251,6 +251,17 @@ body{
   border-radius:9px; padding:9px 12px; font-size:12.5px; color:var(--dim); line-height:1.55; animation:fadein .35s;}
 .find b{color:var(--txt);}
 
+/* ---------- эссе-защита (финал) ---------- */
+.essaywrap{display:grid; grid-template-columns:1fr 240px; gap:12px; padding:4px 18px 0;}
+@media (max-width:760px){ .essaywrap{grid-template-columns:1fr;} }
+.essaybox{width:100%; background:var(--bg2); border:1px solid var(--line); border-radius:11px;
+  color:var(--txt); padding:12px 14px; font-size:13.5px; line-height:1.55; font-family:inherit; resize:vertical;}
+.essaybox:focus{outline:none; border-color:var(--acc2);}
+.essaybox:disabled{opacity:.65;}
+.essameter{background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px 13px; align-self:start;}
+.essitem{font-size:11.5px; color:var(--faint); padding:3px 0; line-height:1.4; transition:.2s;}
+.essitem.on{color:var(--ok);}
+
 /* ---------- итог / артефакт ---------- */
 .award{margin:14px 18px 0; background:linear-gradient(135deg, rgba(255,159,67,.12), rgba(79,195,247,.07));
   border:1px solid rgba(255,159,67,.45); border-radius:14px; padding:16px; display:flex; gap:14px; align-items:center;}

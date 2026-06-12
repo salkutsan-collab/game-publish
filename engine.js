@@ -731,6 +731,106 @@ function sensLaunch(){
   save(); renderSens(sc); renderTop(sc); renderSide();
 }
 
+/* ---------- fdash: итоговый дашборд проекта (финал) ---------- */
+function projRank(){
+  var r = S.res;
+  /* адекватность - главное; доверие - второе; уложился в срок с запасом - бонус */
+  var timing = r.weeks<=45 ? 20 : (r.weeks<=52 ? 10 : 0);
+  var score = Math.round(r.adeq*0.5 + r.trust*0.3 + timing);
+  if(score>100) score = 100;
+  var rank = score>=85 ? "Главный конструктор" : score>=70 ? "Ведущий инженер" : score>=55 ? "Инженер проекта" : "Менеджер презентаций";
+  return { score:score, rank:rank };
+}
+function renderFdash(sc){
+  var r = S.res;
+  var tests = 0; S.log.forEach(function(e){ if(e.type==="camp" && e.tests) tests = e.tests; });
+  var lost = !!S.flags.sampleLost;
+  var incGood = S.log.some(function(e){ return e.type==="choice" && e.scene==="a10inc" && e.q==="good"; });
+  var pr = projRank();
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='sumrow'>"+
+    "<div class='sumcell'>Срок проекта<b>"+r.weeks+" из 52 недель</b></div>"+
+    "<div class='sumcell'>Остаток бюджета<b>"+r.budget+" млн руб</b></div>"+
+    "<div class='sumcell'>Адекватность двойника<b>"+r.adeq+"%</b></div>"+
+    "<div class='sumcell'>Доверие заказчика<b>"+r.trust+"</b></div></div>";
+  html += "<div class='sumrow'>"+
+    "<div class='sumcell'>Виртуальных испытаний<b>"+(tests?tests.toLocaleString("ru-RU"):"тысячи")+"</b></div>"+
+    "<div class='sumcell'>Опытных образцов<b>"+(lost?"2 из 2 (один потерян)":"1 из 2")+"</b></div>"+
+    "<div class='sumcell'>Раньше уходило<b>до 10 образцов</b></div>"+
+    "<div class='sumcell'>Инцидент в небе<b>"+(incGood?"предотвращен":"стоил денег")+"</b></div></div>";
+  html += "<div class='award'><div class='ic'>📊</div><div><div class='t'>Готовность к защите: "+pr.score+" из 100</div>"+
+    "<div class='d'>Сводный итог решений за весь проект: адекватность двойника, доверие заказчика, срок и бюджет. "+
+    (lost?"Потеря образца №1 и авральные доработки - в этих цифрах тоже.":"Натурные испытания подтвердили расчет - в этих цифрах виден чистый путь.")+"</div></div></div>";
+  shell(sc, html, nextBtnHtml("К защите", true));
+}
+
+/* ---------- essay: защита проекта с термин-метром (финал) ---------- */
+function essayEval(t){
+  var hits = ESSAY.need.filter(function(g){ return g.re.test(t); });
+  var words = (t.match(/[а-яёa-z0-9]+/gi)||[]).length;
+  return { hits:hits, words:words };
+}
+function renderEssay(sc){
+  var st = S.ui.es || (S.ui.es = { text:"", done:false, score:0 });
+  var ev = essayEval(st.text);
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(ESSAY.prompt)+"</div>";
+  html += "<div class='essaywrap'>";
+  html += "<div><textarea id='esstext' class='essaybox' rows='9' "+(st.done?"disabled":"")+" oninput='G.essayInput(this.value)' placeholder='Ваше выступление...'>"+esc(st.text)+"</textarea>"+
+    "<div class='mxstatus'>Слов: <b id='esswords'>"+ev.words+"</b> (нужно от "+ESSAY.minWords+") · терминов: <b id='esshits'>"+ev.hits.length+"</b> из "+ESSAY.need.length+" (нужно от "+ESSAY.minHits+")</div></div>";
+  html += "<div class='essameter' id='essmeter'>"+essMeterHtml(ev)+"</div>";
+  html += "</div>";
+  html += "<div class='verdict' id='verdict'></div>";
+  if(st.done){
+    var pct = Math.round(ev.hits.length/ESSAY.need.length*100);
+    html += "<div class='verdict show "+(pct>=80?"good":(pct>=50?"weak":"bad"))+"'><b>Совет корпорации:</b> "+
+      (pct>=80 ? "аплодисменты. Заказчик шепнул директору: «Вот за это я и платил». Владение терминами - "+pct+"%: инженер двойника состоялся."
+       : pct>=50 ? "сдержанные кивки. Путь рассказан, но часть инструментов осталась за кадром (термин-метр подскажет, какие). Владение - "+pct+"%."
+       : "вежливая тишина. Рассказ получился общим - термины курса почти не прозвучали ("+pct+"%). Гарин записал тему для разговора.")+
+      " Текст выступления сохранен в отчете для преподавателя.</div>";
+  }
+  html += "<div class='hint' id='hintbox'><b>Гарин:</b> "+esc(sc.hint||"")+"</div>";
+  var canSubmit = !st.done && ev.words>=ESSAY.minWords && ev.hits.length>=ESSAY.minHits;
+  var foot = st.done
+    ? nextBtnHtml("Продолжить", true)
+    : hintBtnHtml() + "<button class='nextbtn"+(canSubmit?" ready":"")+"' id='nextbtn' onclick='G.essaySubmit()'>🎤 Выступить</button>";
+  shell(sc, html, foot);
+}
+function essMeterHtml(ev){
+  var keys = ev.hits.map(function(g){ return g.k; });
+  return "<h5 style='font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>Термин-метр</h5>" +
+    ESSAY.need.map(function(g){
+      var on = keys.indexOf(g.k)>=0;
+      return "<div class='essitem"+(on?" on":"")+"'>"+(on?"✅":"⬜")+" "+esc(g.label)+"</div>";
+    }).join("");
+}
+function essayInput(v){
+  var st = S.ui.es;
+  if(st.done) return;
+  st.text = v;
+  var ev = essayEval(v);
+  el("essmeter").innerHTML = essMeterHtml(ev);
+  el("esswords").textContent = ev.words;
+  el("esshits").textContent = ev.hits.length;
+  var btn = el("nextbtn");
+  if(btn){
+    if(ev.words>=ESSAY.minWords && ev.hits.length>=ESSAY.minHits) btn.classList.add("ready");
+    else btn.classList.remove("ready");
+  }
+  save();
+}
+function essaySubmit(){
+  var sc = STORY.scenes[S.scene], st = S.ui.es;
+  var ev = essayEval(st.text);
+  if(st.done || ev.words<ESSAY.minWords || ev.hits.length<ESSAY.minHits) return;
+  st.done = true;
+  var pct = Math.round(ev.hits.length/ESSAY.need.length*100);
+  st.score = pct;
+  applyFx(pct>=80 ? {trust:6, adeq:5} : (pct>=50 ? {trust:3, adeq:3} : {trust:0}));
+  logEv("essay", { text:st.text, words:ev.words, hits:ev.hits.length, pct:pct, hint:!!S.ui.hintUsed });
+  save(); renderEssay(sc); renderTop(sc);
+}
+
 /* ---------- result: итог акта ---------- */
 function renderResult(sc){
   var a = null; ARTS.forEach(function(x){ if(x.id===sc.award.art) a=x; });
@@ -740,12 +840,20 @@ function renderResult(sc){
   shell(sc, html, nextBtnHtml("Дальше", true));
 }
 
-/* ---------- end: конец среза ---------- */
+/* ---------- end: эпилог / конец доступного контента ---------- */
 function renderEnd(sc){
   var r = S.res;
   var qs = { good:0, weak:0, bad:0 };
   S.log.forEach(function(e){ if(e.type==="choice" && qs[e.q]!=null) qs[e.q]++; });
-  var html = "<div class='task'><b>"+esc(sc.title)+".</b> Спасибо! Главы из списка «Что дальше по сюжету» еще НЕ разработаны - они появятся с обновлениями игры, а ваш прогресс сохранится и продолжится с нового места.</div>";
+  var html;
+  if(sc.final){
+    var pr = projRank();
+    html = "<div class='task'><b>"+esc(sc.title)+".</b> Это полная версия сюжета - спасибо за прохождение! Все решения и текст защиты сохранены в логе для преподавателя.</div>";
+    html += "<div class='award'><div class='ic'>🏆</div><div><div class='t'>Звание: "+esc(pr.rank)+"</div>"+
+      "<div class='d'>Итоговый балл проекта: "+pr.score+" из 100 - сводный итог адекватности двойника, доверия заказчика, срока и бюджета.</div></div></div>";
+  } else {
+    html = "<div class='task'><b>"+esc(sc.title)+".</b> Спасибо! Главы из списка «Что дальше по сюжету» еще НЕ разработаны - они появятся с обновлениями игры, а ваш прогресс сохранится и продолжится с нового места.</div>";
+  }
   html += "<div class='sumrow'>"+
     "<div class='sumcell'>Потрачено недель<b>"+r.weeks+" из "+WEEKS_TOTAL+"</b></div>"+
     "<div class='sumcell'>Остаток бюджета<b>"+r.budget+" млн</b></div>"+
@@ -760,8 +868,10 @@ function renderEnd(sc){
     html += "<br><span class='g'>Отложенных последствий не накоплено - чистое прохождение.</span>";
   }
   html += "</div>";
-  html += "<div class='sumlist'><b style='color:var(--txt)'>Что дальше по сюжету:</b><ul>"+
-    sc.coming.map(function(c){ return "<li>"+esc(c)+"</li>"; }).join("")+"</ul></div>";
+  if(sc.coming && sc.coming.length){
+    html += "<div class='sumlist'><b style='color:var(--txt)'>Что дальше по сюжету:</b><ul>"+
+      sc.coming.map(function(c){ return "<li>"+esc(c)+"</li>"; }).join("")+"</ul></div>";
+  }
   shell(sc, html, "<button class='btn ghost' onclick='G.restartConfirm()'>Пройти заново</button>");
 }
 
@@ -778,6 +888,8 @@ function render(){
   else if(sc.type==="camp") renderCamp(sc);
   else if(sc.type==="ntest") renderNtest(sc);
   else if(sc.type==="sens") renderSens(sc);
+  else if(sc.type==="fdash") renderFdash(sc);
+  else if(sc.type==="essay") renderEssay(sc);
   else if(sc.type==="diag") renderDiag(sc);
   else if(sc.type==="valid") renderValid(sc);
   else if(sc.type==="result") renderResult(sc);
@@ -846,6 +958,8 @@ return {
     else if(sc.type==="camp"){ if(S.ui.cp && S.ui.cp.done) goNext(sc); }
     else if(sc.type==="ntest") ntestStep(sc);
     else if(sc.type==="sens"){ if(S.ui.sn && S.ui.sn.done) goNext(sc); }
+    else if(sc.type==="fdash") goNext(sc);
+    else if(sc.type==="essay"){ if(S.ui.es && S.ui.es.done) goNext(sc); }
     else if(sc.type==="diag"){ if(S.ui.dg && S.ui.dg.concluded) goNext(sc); }
     else if(sc.type==="valid"){ if(S.ui.vd && S.ui.vd.resolved) goNext(sc); }
     else if(sc.type==="result") goNext(sc);
@@ -864,6 +978,7 @@ return {
   treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
   campSel: campSel, campLaunch: campLaunch,
   sensPick: sensPick, sensLaunch: sensLaunch,
+  essayInput: essayInput, essaySubmit: essaySubmit,
   gotoAct: function(id){
     var i = actIdx(id);
     if(i<0 || i>actIdx(S.maxActId||"p")) return;
