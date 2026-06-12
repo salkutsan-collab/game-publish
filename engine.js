@@ -34,7 +34,7 @@ function analyticsOn(){ return !!((ANALYTICS.googleForm && ANALYTICS.googleForm.
 function makeReport(reason){
   var pr = projRank();
   return {
-    игра:"Путь двойника", версия:"полный сюжет (пролог + 10 актов + финал)",
+    игра:"Путь двойника", версия:"полный сюжет (пролог + 11 актов + финал)",
     причина:reason||"",
     слушатель:S.name, начало:new Date(S.started).toISOString(),
     достигнут_акт:(ACTS[Math.max(0, actIdx(S.maxActId||"p"))]||{}).t || "Пролог",
@@ -195,11 +195,11 @@ function renderTop(sc){
     return " <span class='delta "+(up?"up":"down")+"'>"+(diff>0?"+":"")+diff+"</span>";
   }
   el("resbar").innerHTML =
-    "<div class='chip'><small>Недели</small><b>"+(WEEKS_TOTAL-r.weeks)+" <span style='color:var(--dim);font-weight:400'>/ "+WEEKS_TOTAL+"</span>"+d("weeks",true)+"</b></div>"+
-    "<div class='chip'><small>Бюджет</small><b>"+r.budget+" <span style='color:var(--dim);font-weight:400'>млн</span>"+d("budget")+"</b></div>"+
-    "<div class='chip'><small>Ядро-часы</small><b>"+r.cores+"</b></div>"+
-    "<div class='chip'><small>Доверие</small><b>"+r.trust+d("trust")+"</b></div>"+
-    "<div class='chip adeq'><small>Адекватность</small><b>"+r.adeq+"%"+d("adeq")+"</b><div class='bar'><i style='width:"+r.adeq+"%'></i></div></div>";
+    "<div class='chip' title='Время проекта: всего 52 недели до сдачи. Каждое решение и переделка стоят недель. Уложитесь в срок - бонус к итоговому званию.'><small>Недели</small><b>"+(WEEKS_TOTAL-r.weeks)+" <span style='color:var(--dim);font-weight:400'>/ "+WEEKS_TOTAL+"</span>"+d("weeks",true)+"</b></div>"+
+    "<div class='chip' title='Деньги проекта, млн руб. Идут на лицензии, вычислительные мощности, испытания и переделки.'><small>Бюджет</small><b>"+r.budget+" <span style='color:var(--dim);font-weight:400'>млн</span>"+d("budget")+"</b></div>"+
+    "<div class='chip' title='Вычислительный ресурс на расчёты и виртуальные испытания. Свои кончились - расчёты оплачиваются подрядчику деньгами.'><small>Ядро-часы</small><b>"+r.cores+"</b></div>"+
+    "<div class='chip' title='Доверие директора и заказчика к вам. Растёт от обоснованных решений, падает от слабых. Влияет на итоговое звание.'><small>Доверие</small><b>"+r.trust+d("trust")+"</b></div>"+
+    "<div class='chip adeq' title='Насколько цифровой двойник соответствует реальному изделию - главный показатель качества. Растёт от проверенных моделей и испытаний. Влияет на итоговое звание.'><small>Адекватность</small><b>"+r.adeq+"%"+d("adeq")+"</b><div class='bar'><i style='width:"+r.adeq+"%'></i></div></div>";
   prevRes = { weeks:r.weeks, budget:r.budget, cores:r.cores, trust:r.trust, adeq:r.adeq };
 }
 
@@ -287,6 +287,7 @@ function advDialog(sc){
 
 /* ---------- choice: выбор (+ обоснование) ---------- */
 function renderChoice(sc){
+  pickState = null;  // чистый вход в сцену
   var html = "";
   if(sc.pre){ html += "<div class='dialog'>"; sc.pre.forEach(function(l){ html += say(l.who, l.t); }); html += "</div>"; }
   html += "<div class='task'>"+sub(sc.task)+"</div>";
@@ -299,23 +300,25 @@ function renderChoice(sc){
   html += "<div class='justify' id='justify'></div>";
   html += "<div class='verdict' id='verdict'></div>";
   html += "<div class='hint' id='hintbox'><b>Гарин:</b> "+esc(sc.hint||"Здесь подсказки нет - решение за тобой. Но я рядом.")+"</div>";
-  shell(sc, html, hintBtnHtml() + nextBtnHtml("Продолжить", false));
+  /* сначала реши - кнопка «Принять решение»; последствие покажется ПОСЛЕ фиксации */
+  shell(sc, html, hintBtnHtml() + nextBtnHtml("Принять решение", false));
 }
-var pickState = null; // {opt, just, q}
+var pickState = null; // {opt, just, q, fbText, committed}
 function pick(i){
   var sc = STORY.scenes[S.scene], o = sc.options[i];
-  pickState = { opt:i, just:null, q:null };
+  if(pickState && pickState.committed) return;  // решение уже принято - не переигрываем
+  pickState = { opt:i, just:null, q:null, fbText:null, committed:false };
   document.querySelectorAll(".card").forEach(function(c){ c.classList.remove("sel"); });
   el("opt"+i).classList.add("sel");
-  var v = el("verdict"); v.className="verdict"; v.innerHTML="";
-  el("nextbtn").classList.remove("ready");
+  var v = el("verdict"); v.className="verdict"; v.innerHTML="";  // НИКАКОГО превью последствия до фиксации
+  var j = el("justify");
   if(sc.noJust){
     pickState.q = o.fb.q;
-    v.className = "verdict show "+o.fb.q;
-    v.innerHTML = sub(o.fb.t);
-    el("nextbtn").classList.add("ready");
+    pickState.fbText = sub(o.fb.t);
+    if(j){ j.className="justify"; j.innerHTML=""; }
+    el("nextbtn").classList.add("ready");   // выбор полон - можно фиксировать
   } else {
-    var j = el("justify");
+    el("nextbtn").classList.remove("ready");  // ждём обоснование
     j.className = "justify open";
     j.innerHTML = "<div class='step-title' style='padding-left:0'>Шаг 2 из 2 · <span>Обоснование - почему так?</span></div>"+
       o.just.map(function(jo,k){
@@ -324,23 +327,26 @@ function pick(i){
   }
 }
 function just(k){
+  if(!pickState || pickState.committed) return;
   var sc = STORY.scenes[S.scene], o = sc.options[pickState.opt], jo = o.just[k];
-  pickState.just = k; pickState.q = jo.q;
-  document.querySelectorAll(".jopt").forEach(function(x){ x.classList.remove("good","weak","bad"); });
-  el("jopt"+k).classList.add(jo.q);
-  var v = el("verdict");
-  v.className = "verdict show "+jo.q;
-  v.innerHTML = sub(jo.fb);
-  el("nextbtn").classList.add("ready");
+  pickState.just = k; pickState.q = jo.q; pickState.fbText = sub(jo.fb);
+  document.querySelectorAll(".jopt").forEach(function(x){ x.classList.remove("sel"); });  // нейтральное выделение, без цвета качества
+  el("jopt"+k).classList.add("sel");
+  el("nextbtn").classList.add("ready");   // выбор полон - можно фиксировать
 }
-function confirmChoice(sc){
+/* фиксация решения: применяем эффекты и ТОЛЬКО ТЕПЕРЬ показываем последствие (нейтрально, без цвета) */
+function commitChoice(sc){
   var o = sc.options[pickState.opt];
   applyFx(o.fx);
   applyFx(qualFx(pickState.q));
-  if(o.fx && o.fx.defer){} // defer уже записан в applyFx
   logEv("choice", { opt:o.t, just:(pickState.just!=null ? o.just[pickState.just].t : null), q:pickState.q, hint:!!S.ui.hintUsed });
-  pickState = null;
-  goNext(sc);
+  pickState.committed = true;
+  var v = el("verdict");
+  v.className = "verdict show neutral";
+  v.innerHTML = pickState.fbText || "";
+  document.querySelectorAll(".card, .jopt").forEach(function(x){ x.style.pointerEvents = "none"; });  // назад нельзя
+  var b = el("nextbtn"); if(b){ b.textContent = "Продолжить →"; b.classList.add("ready"); }
+  save(); renderTop(sc); renderSide();   // ресурсы изменились по факту - показать сразу
 }
 
 /* ---------- talks: разведка мнений ---------- */
@@ -425,8 +431,111 @@ function confirmMatrix(sc){
   }
   applyFx(sc.cost ? {weeks:sc.cost.weeks, budget:sc.cost.budget} : null);
   if(all){ applyFx({adeq:6, trust:4}); }
-  else { applyFx({trust:-5, flag:{matrixReds:true}, defer:"Акт 6: "+(MATRIX.inds.length-green)+" красных ячеек матрицы всплывут на виртуальных испытаниях"}); }
+  else { applyFx({trust:-5, flag:{matrixReds:true}, defer:"Акт 9 (натурные): "+(MATRIX.inds.length-green)+" красных ячеек матрицы всплывут на испытаниях опытного образца"}); }
   logEv("matrix", { green:green, total:MATRIX.inds.length, moves:S.ui.moves||0, hint:!!S.ui.hintUsed, sliders:mxVals() });
+  goNext(sc);
+}
+
+/* ---------- reqfill: наполнение матрицы требованиями (акт 2) ----------
+   Раскрой каждое требование - увидишь целевое значение, источник, от чего зависит
+   и с чем конфликтует. Это условия задачи, без решения (балансировка - позже). */
+function renderReqfill(sc){
+  var st = S.ui.rf || (S.ui.rf = { open:[] });
+  var total = A2FILL.items.length;
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='reqgrid'>" + A2FILL.items.map(function(it,i){
+    var on = st.open.indexOf(i)>=0;
+    return "<div class='reqcard"+(on?" open":"")+"' onclick='G.reqOpen("+i+")'>"+
+      "<div class='reqtop'><b>"+esc(it.t)+"</b><span class='reqtgt'>"+esc(it.target)+"</span></div>"+
+      (on
+        ? "<div class='reqdet'><div><i>источник:</i> "+esc(it.src)+"</div>"+
+          "<div><i>зависит от:</i> "+esc(it.levers)+"</div>"+
+          "<div class='reqconf'><i>конфликт:</i> "+esc(it.conflict)+"</div></div>"
+        : "<div class='reqhint'>нажмите, чтобы разложить</div>")+
+    "</div>";
+  }).join("") + "</div>";
+  var done = st.open.length===total;
+  html += "<div class='mxstatus'>Разложено требований: <b>"+st.open.length+" из "+total+"</b>"+(done?" - матрица требований наполнена":"")+"</div>";
+  if(done) html += "<div class='verdict show neutral'><b>Гарин:</b> "+esc(A2FILL.done)+"</div>";
+  shell(sc, html, nextBtnHtml("Матрица наполнена", done));
+}
+function reqOpen(i){
+  var sc = STORY.scenes[S.scene];
+  var st = S.ui.rf || (S.ui.rf = { open:[] });
+  if(st.open.indexOf(i)<0){ st.open.push(i); logEv("reqfill",{ item:A2FILL.items[i].id }); }
+  save(); renderReqfill(sc); renderSide();
+}
+function confirmReqfill(sc){
+  var st = S.ui.rf || { open:[] };
+  if(st.open.length !== A2FILL.items.length) return;
+  if(sc.cost) applyFx({ weeks:sc.cost.weeks||0, budget:sc.cost.budget||0 });
+  logEv("reqfillDone", {});
+  goNext(sc);
+}
+
+/* ---------- cases: разведка кейсов (акт 1) ----------
+   Изучить кейсы из разных отраслей и рассортировать на релевантность:
+   «В работу» (опыт применим к нашему ГТД) / «Отложить» (другой объект, ярлык).
+   Из взятого в работу собираются технологии для дальнейшей работы. */
+function caseBucketLabel(id){ var r=id; A1CASES.buckets.forEach(function(b){ if(b.id===id) r=b.label; }); return r; }
+function renderCases(sc){
+  var st = S.ui.cs || (S.ui.cs = { pick:{}, open:[], checked:false });
+  var items = A1CASES.items, review = st.checked;
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(A1CASES.intro)+"</div>";
+  html += "<div class='cases'>";
+  items.forEach(function(it,i){
+    var pick = st.pick[i], open = st.open.indexOf(i)>=0, ok = pick===it.bucket;
+    html += "<div class='casecard"+(review?(ok?" ok":" bad"):"")+"'>"+
+      "<div class='casetop'><b>"+esc(it.t)+"</b><span class='caseind'>"+esc(it.ind)+"</span></div>"+
+      "<button class='caseread' onclick='G.caseRead("+i+")'>"+(open?"▲ Скрыть":"ⓘ Читать")+"</button>"+
+      (open ? "<div class='casefacts'>"+esc(it.facts)+"<div class='caselink'><a href='"+esc(it.url)+"' target='_blank' rel='noopener'>Читать статью →</a></div></div>" : "");
+    if(!review){
+      html += "<div class='casebtns'>"+A1CASES.buckets.map(function(b){
+        return "<button class='casebtn"+(pick===b.id?" on":"")+"' onclick='G.casePick("+i+",\""+b.id+"\")'>"+esc(b.label)+"</button>";
+      }).join("")+"</div>";
+    } else {
+      html += "<div class='caseverdict'>"+(ok?"✓ верно: "+esc(caseBucketLabel(it.bucket)) : "ваш выбор: "+esc(caseBucketLabel(pick))+" · верно: "+esc(caseBucketLabel(it.bucket)))+
+        "<div class='casewhy'>"+esc(it.why)+"</div></div>";
+    }
+    html += "</div>";
+  });
+  html += "</div>";
+  if(review){
+    var techs = {}; items.forEach(function(it){ if(it.bucket==="work") (it.tech||[]).forEach(function(t){ techs[t]=1; }); });
+    html += "<div class='casetech'><b>В работу взяты технологии:</b> "+Object.keys(techs).map(function(t){ return "<span class='techchip'>"+esc(t)+"</span>"; }).join("")+"</div>";
+    var correct=0; items.forEach(function(it,i){ if(st.pick[i]===it.bucket) correct++; });
+    html += "<div class='verdict show neutral'><b>Гарин:</b> "+esc(A1CASES.done)+" Верно рассортировано: "+correct+" из "+items.length+".</div>";
+  }
+  var assigned = Object.keys(st.pick).length;
+  var foot = review
+    ? nextBtnHtml("Продолжить", true)
+    : "<button class='nextbtn"+(assigned>=items.length?" ready":"")+"' id='nextbtn' onclick='G.casesCheck()'>Проверить сортировку</button>";
+  shell(sc, html, foot);
+}
+function caseRead(i){
+  var st = S.ui.cs || (S.ui.cs={pick:{},open:[],checked:false});
+  var ix = st.open.indexOf(i); if(ix>=0) st.open.splice(ix,1); else st.open.push(i);
+  save(); renderCases(STORY.scenes[S.scene]);
+}
+function casePick(i,b){
+  var st = S.ui.cs; if(!st || st.checked) return;
+  st.pick[i]=b; logEv("casePick",{ id:A1CASES.items[i].id, bucket:b });
+  save(); renderCases(STORY.scenes[S.scene]);
+}
+function casesCheck(){
+  var sc = STORY.scenes[S.scene], st = S.ui.cs, items = A1CASES.items;
+  if(!st || Object.keys(st.pick).length < items.length) return;
+  st.checked = true;
+  var correct=0; items.forEach(function(it,i){ if(st.pick[i]===it.bucket) correct++; });
+  applyFx({ adeq:2, trust: (correct>=items.length-1 ? 2 : 0) });
+  logEv("casesDone",{ correct:correct, total:items.length });
+  save(); renderCases(sc); renderTop(sc); renderSide();
+}
+function confirmCases(sc){
+  if(!S.ui.cs || !S.ui.cs.checked) return;
+  if(sc.cost) applyFx({ weeks:sc.cost.weeks||0 });
+  logEv("casesNext",{});
   goNext(sc);
 }
 
@@ -651,7 +760,7 @@ function vchartSvg(calibrated){
     "<rect x='"+padL+"' y='10' width='"+zoneW.toFixed(0)+"' height='"+(H-padB-10)+"' fill='rgba(90,209,138,.06)'/>"+
     "<line x1='"+(padL+zoneW).toFixed(0)+"' y1='10' x2='"+(padL+zoneW).toFixed(0)+"' y2='"+(H-padB)+"' stroke='var(--line)' stroke-dasharray='4 4'/>"+
     "<text x='"+(padL+8)+"' y='24' font-size='10' fill='var(--ok)'>рабочая зона · расхождение ~"+(calibrated?"3":"4")+"%</text>"+
-    "<text x='"+(padL+zoneW+8).toFixed(0)+"' y='24' font-size='10' fill='"+(calibrated?"var(--ok)":"var(--bad)")+"'>выше · "+(calibrated?"~4% после калибровки":"до 18%")+"</text>"+
+    "<text x='"+(padL+zoneW+8).toFixed(0)+"' y='24' font-size='10' fill='"+(calibrated?"var(--ok)":"var(--bad)")+"'>выше · "+(calibrated?"~4% после уточнения модели":"до 18%")+"</text>"+
     "<line x1='"+padL+"' y1='"+(H-padB)+"' x2='"+(W-6)+"' y2='"+(H-padB)+"' stroke='var(--line)'/>"+
     "<line x1='"+padL+"' y1='10' x2='"+padL+"' y2='"+(H-padB)+"' stroke='var(--line)'/>"+
     "<text x='"+(W/2)+"' y='"+(H-8)+"' font-size='10' fill='var(--dim)' text-anchor='middle'>частота</text>"+
@@ -1104,6 +1213,29 @@ function renderEnd(sc){
   shell(sc, html, endFoot);
 }
 
+/* ---------- одноразовая вводная: что значат ресурсы и от чего зависит итог ---------- */
+function showResIntro(){
+  if(document.querySelector(".introlayer")) return;
+  var ov = document.createElement("div");
+  ov.className = "introlayer";
+  ov.innerHTML = "<div class='introcard'>"+
+    "<h2>Как устроена игра</h2>"+
+    "<p>Вы - руководитель проекта. Шаг за шагом вы строите цифровой двойник двигателя и принимаете решения. У решений есть последствия: они меняют пять показателей проекта (вверху экрана). Решения необратимы - думайте, прежде чем принять.</p>"+
+    "<div class='introres'>"+
+      "<div><b>Недели</b><span>Время: всего 52 до сдачи. Переделки съедают недели.</span></div>"+
+      "<div><b>Бюджет</b><span>Деньги, млн руб: лицензии, мощности, испытания.</span></div>"+
+      "<div><b>Ядро-часы</b><span>Ресурс на расчёты и виртуальные испытания.</span></div>"+
+      "<div><b>Доверие</b><span>Доверие директора и заказчика. Растёт от обоснованных решений.</span></div>"+
+      "<div><b>Адекватность</b><span>Насколько двойник соответствует реальности - главный показатель качества.</span></div>"+
+    "</div>"+
+    "<p class='introsum'>Итог проекта и ваше звание = <b>адекватность двойника</b> + <b>доверие заказчика</b> + уложились ли в <b>срок</b>. Подсказку по любому показателю можно увидеть, наведя на него курсор.</p>"+
+    "<button class='nextbtn ready' id='introgo'>Начать проект →</button>"+
+  "</div>";
+  document.body.appendChild(ov);
+  var go = document.getElementById("introgo");
+  if(go) go.onclick = function(){ ov.remove(); };
+}
+
 /* ---------- роутер ---------- */
 function render(){
   var sc = STORY.scenes[S.scene];
@@ -1113,6 +1245,8 @@ function render(){
   else if(sc.type==="choice") renderChoice(sc);
   else if(sc.type==="talks") renderTalks(sc);
   else if(sc.type==="matrix") renderMatrix(sc);
+  else if(sc.type==="reqfill") renderReqfill(sc);
+  else if(sc.type==="cases") renderCases(sc);
   else if(sc.type==="tree") renderTree(sc);
   else if(sc.type==="camp") renderCamp(sc);
   else if(sc.type==="ntest") renderNtest(sc);
@@ -1179,6 +1313,7 @@ return {
     el("login").classList.add("hidden");
     el("game").classList.remove("hidden");
     render();
+    showResIntro();   // одноразовая вводная только для новой игры
   },
   cont: function(){
     el("login").classList.add("hidden");
@@ -1195,9 +1330,18 @@ return {
   next: function(){
     var sc = STORY.scenes[S.scene];
     if(sc.type==="dialog") advDialog(sc);
-    else if(sc.type==="choice"){ if(pickState && pickState.q) confirmChoice(sc); }
+    else if(sc.type==="choice"){
+      if(!pickState) return;
+      if(!pickState.committed){
+        if(pickState.opt==null) return;
+        if(!sc.noJust && pickState.just==null) return;
+        commitChoice(sc);          // первый клик кнопки - принять решение, показать последствие
+      } else { goNext(sc); }       // второй клик - дальше
+    }
     else if(sc.type==="talks"){ if((S.ui.visited||[]).length>=sc.min){ logEv("talksDone",{n:S.ui.visited.length}); goNext(sc); } }
     else if(sc.type==="matrix") confirmMatrix(sc);
+    else if(sc.type==="reqfill") confirmReqfill(sc);
+    else if(sc.type==="cases"){ if(S.ui.cs && S.ui.cs.checked) confirmCases(sc); }
     else if(sc.type==="tree") confirmTree(sc);
     else if(sc.type==="camp"){ if(S.ui.cp && S.ui.cp.done) goNext(sc); }
     else if(sc.type==="ntest") ntestStep(sc);
@@ -1227,7 +1371,8 @@ return {
     document.querySelectorAll(".revdot").forEach(function(g){ g.classList.remove("sel"); });
     var g = el("revdot"+k); if(g) g.classList.add("sel");
   },
-  pick: pick, just: just, talk: talk, slide: slide,
+  pick: pick, just: just, talk: talk, slide: slide, reqOpen: reqOpen,
+  caseRead: caseRead, casePick: casePick, casesCheck: casesCheck,
   treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
   campSel: campSel, campLaunch: campLaunch,
   sensPick: sensPick, sensLaunch: sensLaunch,
