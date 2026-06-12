@@ -98,6 +98,10 @@ function applyFx(fx){
   if(fx.spendCores) spendCores(fx.spendCores);
   if(fx.defer){ S.defers.push(fx.defer); logEv("defer",{text:fx.defer}); }
 }
+/* снять отложенное последствие по подстроке (когда оно сработало или исправлено) */
+function removeDefers(match){
+  S.defers = S.defers.filter(function(d){ return d.indexOf(match)<0; });
+}
 /* списать ядро-часы; если своих нет (аутсорс) - платим подрядчику деньгами */
 function spendCores(n){
   if(!n) return "";
@@ -167,7 +171,7 @@ function renderSide(){
 
   /* панель «Акты»: переходы по достигнутым актам */
   var curAct = sceneActId(S.scene), maxI = actIdx(S.maxActId||"p");
-  el("p-acts").innerHTML = "<h3>Акты · переходы</h3>" + ACTS.map(function(a,i){
+  var actsHtml = "<h3>Акты · переходы</h3>" + ACTS.map(function(a,i){
     var here = a.id===curAct, open = i<=maxI;
     var right = here ? "<span class='tag rent'>вы здесь</span>"
       : open ? "<span class='tag have' style='cursor:pointer' onclick=\"G.gotoAct('"+a.id+"')\">перейти</span>"
@@ -175,6 +179,19 @@ function renderSide(){
     return "<div class='tech'"+(here?" style='border-color:var(--acc)'":"")+">"+esc(a.t)+" "+right+"</div>";
   }).join("") +
   "<div class='counter'>Достигнутые акты можно открыть заново - например, чтобы продолжить с нового места после обновления игры. Ресурсы при переходе сохраняются как есть.</div>";
+  /* пересмотр решений: активные отложенные последствия можно исправить точечно */
+  if(S.defers.length){
+    actsHtml += "<h3 style='margin-top:14px'>Отложенные последствия · пересмотр</h3>" + S.defers.map(function(d,i){
+      var fix = null;
+      REDO.forEach(function(rd){ if(!fix && d.indexOf(rd.match)>=0) fix = rd; });
+      var btn = fix ? "<div style='margin-top:6px'><span class='tag have' style='cursor:pointer' onclick='G.redoFix("+i+")'>исправить · "+
+        esc([(fix.cost.budget?(-fix.cost.budget)+" млн":""),(fix.cost.weeks?fix.cost.weeks+" нед":"")].filter(Boolean).join(" + ")||"бесплатно")+"</span> "+
+        "<span style='font-size:11px;color:var(--dim)'>"+esc(fix.t)+"</span></div>" : "";
+      return "<div class='tech' style='display:block'>"+esc(d)+btn+"</div>";
+    }).join("") +
+    "<div class='counter'>Пересмотр решения - принцип платформы с ядром SPDM: изменились условия - меняется ОДНО решение и его связи, а не весь проект. Исправление стоит ресурсов, но дешевле аврала, когда последствие выстрелит само.</div>";
+  }
+  el("p-acts").innerHTML = actsHtml;
 }
 
 /* ---------- сцена: каркас ---------- */
@@ -645,6 +662,7 @@ function ntestStep(sc){
     var step = NTEST.steps[st.i];
     var fired = !!(step.fire && step.fire(S.flags, S.arts));
     if(fired && step.fx) applyFx(step.fx);
+    if(fired && step.clearDefer) removeDefers(step.clearDefer);
     st.recs.push({ i:st.i, fired:fired });
     logEv("ntest",{ step:st.i, fired:fired });
     st.i++;
@@ -731,6 +749,56 @@ function sensLaunch(){
   save(); renderSens(sc); renderTop(sc); renderSide();
 }
 
+/* ---------- review: разбор полетов - дерево решений + рефлексия (финал) ---------- */
+function decisionOf(scene){
+  /* последнее событие решения по сцене */
+  var ev = null;
+  S.log.forEach(function(e){
+    if(e.scene!==scene) return;
+    if(e.type==="choice" || e.type==="valid" || e.type==="diagConclude") ev = { opt:(e.opt||""), q:e.q };
+    if(e.type==="matrix") ev = { opt:(e.green===e.total ? "Все показатели в допуске" : "Утверждена с красными ячейками ("+(e.total-e.green)+")"), q:(e.green===e.total ? "good":"bad") };
+  });
+  return ev;
+}
+function reviewTreeSvg(rows){
+  var n = rows.length, step = 84, W = 60+n*step, H = 300, y0 = 150;
+  var qcol = { good:"var(--ok)", weak:"var(--warn)", bad:"var(--bad)" };
+  var path = "", nodes = "", labels = "";
+  for(var i=0;i<n;i++){
+    var x = 60+i*step, r = rows[i];
+    if(i>0) path += "<line x1='"+(x-step)+"' y1='"+y0+"' x2='"+x+"' y2='"+y0+"' stroke='var(--acc)' stroke-width='2.4' opacity='.85'/>";
+    /* непройденные ветки - серые, вверх и вниз */
+    nodes += "<path d='M "+x+" "+y0+" Q "+(x+26)+" "+(y0-46)+" "+(x+44)+" "+(y0-62)+"' fill='none' stroke='var(--line)' stroke-width='1.4'/>"+
+             "<circle cx='"+(x+44)+"' cy='"+(y0-62)+"' r='4' fill='var(--faint)'/>"+
+             "<path d='M "+x+" "+y0+" Q "+(x+26)+" "+(y0+46)+" "+(x+44)+" "+(y0+62)+"' fill='none' stroke='var(--line)' stroke-width='1.4'/>"+
+             "<circle cx='"+(x+44)+"' cy='"+(y0+62)+"' r='4' fill='var(--faint)'/>";
+    var col = r.ev ? (qcol[r.ev.q]||"var(--acc2)") : "var(--faint)";
+    nodes += "<circle cx='"+x+"' cy='"+y0+"' r='9' fill='"+col+"' stroke='#0a111d' stroke-width='2'><title>"+esc(r.d.t+": "+(r.ev?r.ev.opt:"-"))+"</title></circle>";
+    var up = (i%2===0);
+    labels += "<text x='"+x+"' y='"+(up? y0-84 : y0+92)+"' font-size='10' fill='var(--dim)' text-anchor='middle' font-family='Segoe UI'>"+esc(r.d.short)+"</text>"+
+      "<line x1='"+x+"' y1='"+(up? y0-12 : y0+12)+"' x2='"+x+"' y2='"+(up? y0-72 : y0+78)+"' stroke='var(--line)' stroke-dasharray='2 4' opacity='.5'/>";
+  }
+  return "<div style='overflow-x:auto'><svg viewBox='0 0 "+W+" "+H+"' style='min-width:"+W+"px;height:"+H+"px;background:#0c1626;border:1px solid var(--line);border-radius:12px'>"+
+    "<line x1='20' y1='"+y0+"' x2='60' y2='"+y0+"' stroke='var(--acc)' stroke-width='2.4' opacity='.85'/>"+
+    path + labels + nodes +
+    "<text x='24' y='24' font-size='11' fill='var(--dim)' font-family='Segoe UI'>ПУТЬ ПРОЕКТА · цвет узла: зеленый - сильное решение, желтый - спорное, красный - ошибка; серые ветки - непройденные варианты</text>"+
+  "</svg></div>";
+}
+function renderReview(sc){
+  var rows = DECISIONS.map(function(d){ return { d:d, ev:decisionOf(d.scene) }; }).filter(function(r){ return r.ev; });
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div style='padding:0 18px'>"+reviewTreeSvg(rows)+"</div>";
+  html += "<div class='need'>Принцип платформы с ядром SPDM: к любой развилке можно вернуться ТОЧЕЧНО - изменились условия, меняется одно решение и его связи, а не весь проект. Активные последствия и кнопки исправления - на вкладке «Акты».</div>";
+  html += "<div class='findings'>"+rows.map(function(r){
+    var refl = r.d.refl[r.ev.q] || "";
+    if(!refl) return "";
+    var col = r.ev.q==="good" ? "var(--ok)" : (r.ev.q==="weak" ? "var(--warn)" : "var(--bad)");
+    return "<div class='find' style='border-left-color:"+col+"'><b style='color:"+col+"'>"+esc(r.d.t)+":</b> "+
+      "<span style='color:var(--txt)'>"+esc(r.ev.opt.replace(/^[^\s]+\s/,""))+"</span><br>"+esc(refl)+"</div>";
+  }).join("")+"</div>";
+  shell(sc, html, nextBtnHtml("К эпилогу", true));
+}
+
 /* ---------- fdash: итоговый дашборд проекта (финал) ---------- */
 function projRank(){
   var r = S.res;
@@ -768,7 +836,14 @@ function renderFdash(sc){
 function essayEval(t){
   var hits = ESSAY.need.filter(function(g){ return g.re.test(t); });
   var words = (t.match(/[а-яёa-z0-9]+/gi)||[]).length;
-  return { hits:hits, words:words };
+  /* связность: рассказ, а не перечень терминов */
+  var sents = t.split(/[.!?…]+/).map(function(s){ return (s.match(/[а-яёa-z0-9]+/gi)||[]).length; }).filter(function(n){ return n>=3; });
+  var avg = sents.length ? sents.reduce(function(a,b){return a+b;},0)/sents.length : 0;
+  var vm = t.match(ESSAY.verbRe)||[];
+  var vroots = {}; vm.forEach(function(v){ vroots[v.slice(0,5).toLowerCase()]=1; });
+  var verbs = Object.keys(vroots).length;
+  var coherent = sents.length>=ESSAY.minSent && verbs>=ESSAY.minVerbs && avg>=6 && avg<=40;
+  return { hits:hits, words:words, sents:sents.length, verbs:verbs, avg:avg, coherent:coherent };
 }
 function renderEssay(sc){
   var st = S.ui.es || (S.ui.es = { text:"", done:false, score:0 });
@@ -777,7 +852,7 @@ function renderEssay(sc){
   html += "<div class='need'>"+esc(ESSAY.prompt)+"</div>";
   html += "<div class='essaywrap'>";
   html += "<div><textarea id='esstext' class='essaybox' rows='9' "+(st.done?"disabled":"")+" oninput='G.essayInput(this.value)' placeholder='Ваше выступление...'>"+esc(st.text)+"</textarea>"+
-    "<div class='mxstatus'>Слов: <b id='esswords'>"+ev.words+"</b> (нужно от "+ESSAY.minWords+") · терминов: <b id='esshits'>"+ev.hits.length+"</b> из "+ESSAY.need.length+" (нужно от "+ESSAY.minHits+")</div></div>";
+    "<div class='mxstatus' id='essstat'>"+essStatHtml(ev)+"</div></div>";
   html += "<div class='essameter' id='essmeter'>"+essMeterHtml(ev)+"</div>";
   html += "</div>";
   html += "<div class='verdict' id='verdict'></div>";
@@ -796,6 +871,10 @@ function renderEssay(sc){
     : hintBtnHtml() + "<button class='nextbtn"+(canSubmit?" ready":"")+"' id='nextbtn' onclick='G.essaySubmit()'>🎤 Выступить</button>";
   shell(sc, html, foot);
 }
+function essStatHtml(ev){
+  return "Слов: <b>"+ev.words+"</b> (от "+ESSAY.minWords+") · терминов: <b>"+ev.hits.length+"</b> из "+ESSAY.need.length+" (от "+ESSAY.minHits+")"+
+    " · предложений: <b>"+ev.sents+"</b> (от "+ESSAY.minSent+") · глаголов действия: <b>"+ev.verbs+"</b> (от "+ESSAY.minVerbs+")";
+}
 function essMeterHtml(ev){
   var keys = ev.hits.map(function(g){ return g.k; });
   return "<h5 style='font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px'>Термин-метр</h5>" +
@@ -810,8 +889,7 @@ function essayInput(v){
   st.text = v;
   var ev = essayEval(v);
   el("essmeter").innerHTML = essMeterHtml(ev);
-  el("esswords").textContent = ev.words;
-  el("esshits").textContent = ev.hits.length;
+  el("essstat").innerHTML = essStatHtml(ev);
   var btn = el("nextbtn");
   if(btn){
     if(ev.words>=ESSAY.minWords && ev.hits.length>=ESSAY.minHits) btn.classList.add("ready");
@@ -823,6 +901,18 @@ function essaySubmit(){
   var sc = STORY.scenes[S.scene], st = S.ui.es;
   var ev = essayEval(st.text);
   if(st.done || ev.words<ESSAY.minWords || ev.hits.length<ESSAY.minHits) return;
+  if(!ev.coherent){
+    /* термины есть, рассказа нет - совет не принимает перечень терминов */
+    var v = el("verdict");
+    v.className = "verdict show bad";
+    v.innerHTML = "<b>Совет корпорации:</b> простите, но это прозвучало как словарь, а не как защита. Нужен связный РАССКАЗ: "+
+      (ev.sents<ESSAY.minSent ? "полных предложений - "+ev.sents+" (нужно от "+ESSAY.minSent+"); " : "")+
+      (ev.verbs<ESSAY.minVerbs ? "глаголов действия - "+ev.verbs+" (нужно от "+ESSAY.minVerbs+": что вы ДЕЛАЛИ - построили, проверили, испытали...); " : "")+
+      (ev.avg>40 ? "предложения слишком длинные - расставьте точки; " : "")+
+      "перепишите и выступите снова.";
+    logEv("essayReject", { words:ev.words, sents:ev.sents, verbs:ev.verbs });
+    return;
+  }
   st.done = true;
   var pct = Math.round(ev.hits.length/ESSAY.need.length*100);
   st.score = pct;
@@ -872,7 +962,10 @@ function renderEnd(sc){
     html += "<div class='sumlist'><b style='color:var(--txt)'>Что дальше по сюжету:</b><ul>"+
       sc.coming.map(function(c){ return "<li>"+esc(c)+"</li>"; }).join("")+"</ul></div>";
   }
-  shell(sc, html, "<button class='btn ghost' onclick='G.restartConfirm()'>Пройти заново</button>");
+  var endFoot = "<button class='btn ghost' onclick='G.restartConfirm()'>Пройти заново</button>" +
+    "<button class='btn ghost' onclick='G.report()'>📥 Отчет для преподавателя</button>" +
+    (sc.final ? "<button class='btn ghost' onclick=\"G.gotoScene('finReview')\">🌳 Разбор решений</button>" : "");
+  shell(sc, html, endFoot);
 }
 
 /* ---------- роутер ---------- */
@@ -890,6 +983,7 @@ function render(){
   else if(sc.type==="sens") renderSens(sc);
   else if(sc.type==="fdash") renderFdash(sc);
   else if(sc.type==="essay") renderEssay(sc);
+  else if(sc.type==="review") renderReview(sc);
   else if(sc.type==="diag") renderDiag(sc);
   else if(sc.type==="valid") renderValid(sc);
   else if(sc.type==="result") renderResult(sc);
@@ -910,6 +1004,7 @@ function goNext(sc){
   S.scene = resolveNext(sc);
   var nsc = STORY.scenes[S.scene];
   if(nsc.onenter){ applyFx(nsc.onenter); }
+  if(nsc.clearDefer){ removeDefers(nsc.clearDefer); }
   if(nsc.type==="result" && nsc.award){ applyFx({art:nsc.award.art}); }
   logEv("enter",{});
   save(); render();
@@ -960,6 +1055,7 @@ return {
     else if(sc.type==="sens"){ if(S.ui.sn && S.ui.sn.done) goNext(sc); }
     else if(sc.type==="fdash") goNext(sc);
     else if(sc.type==="essay"){ if(S.ui.es && S.ui.es.done) goNext(sc); }
+    else if(sc.type==="review") goNext(sc);
     else if(sc.type==="diag"){ if(S.ui.dg && S.ui.dg.concluded) goNext(sc); }
     else if(sc.type==="valid"){ if(S.ui.vd && S.ui.vd.resolved) goNext(sc); }
     else if(sc.type==="result") goNext(sc);
@@ -979,6 +1075,40 @@ return {
   campSel: campSel, campLaunch: campLaunch,
   sensPick: sensPick, sensLaunch: sensLaunch,
   essayInput: essayInput, essaySubmit: essaySubmit,
+  redoFix: function(i){
+    var d = S.defers[i]; if(d==null) return;
+    var fix = null;
+    REDO.forEach(function(rd){ if(!fix && d.indexOf(rd.match)>=0) fix = rd; });
+    if(!fix) return;
+    if(!confirm("Пересмотреть решение: "+fix.t+"?\nЦена: "+([(fix.cost.budget?(-fix.cost.budget)+" млн":""),(fix.cost.weeks?fix.cost.weeks+" нед":"")].filter(Boolean).join(" + ")||"бесплатно"))) return;
+    applyFx(fix.cost); applyFx(fix.fx);
+    S.defers.splice(i,1);
+    logEv("redo",{ defer:d, fix:fix.t });
+    save();
+    var sc = STORY.scenes[S.scene];
+    renderTop(sc); renderSide();
+  },
+  report: function(){
+    var pr = projRank();
+    var rep = {
+      игра:"Путь двойника", версия:"полный сюжет (пролог + 10 актов + финал)",
+      слушатель:S.name, начало:new Date(S.started).toISOString(),
+      итог:{ звание:pr.rank, балл:pr.score, недели:S.res.weeks, бюджет_млн:S.res.budget,
+        ядро_часы:S.res.cores, доверие:S.res.trust, адекватность:S.res.adeq },
+      артефакты:S.arts, неисправленные_последствия:S.defers,
+      решения:S.log.filter(function(e){ return ["choice","valid","diagConclude","matrix","camp","sens","redo","essayReject"].indexOf(e.type)>=0; }),
+      эссе:(S.log.filter(function(e){ return e.type==="essay"; })[0]||null),
+      подсказки:S.log.filter(function(e){ return e.type==="hint"; }).length,
+      полный_лог:S.log
+    };
+    var blob = new Blob([JSON.stringify(rep, null, 2)], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "put-dvoinika-otchet-"+(S.name||"player").replace(/[^a-zа-яё0-9]/gi,"_")+".json";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  },
+  gotoScene: function(id){ if(STORY.scenes[id]){ S.ui={}; S.scene=id; save(); render(); } },
   gotoAct: function(id){
     var i = actIdx(id);
     if(i<0 || i>actIdx(S.maxActId||"p")) return;

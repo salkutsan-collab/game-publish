@@ -487,6 +487,45 @@ function ops(){
   );
 }
 
+/* Эпилог: реальное изделие с людьми и его цифровой двойник, связи в обе стороны */
+function twinmirror(){
+  function engineShape(x, y, wire){
+    var fill = wire ? "none" : "#101d31";
+    var stroke = wire ? "var(--acc2)" : "var(--acc2)";
+    var dash = wire ? " stroke-dasharray='5 4'" : "";
+    var blades = "";
+    for(var k=0;k<8;k++){ blades += "<rect x='-1.4' y='-22' width='2.8' height='19' rx='1.4' fill='"+(wire?"none":"var(--acc2)")+"' "+(wire?"stroke='var(--acc2)' stroke-width='1'"+dash:"opacity='.85'")+" transform='rotate("+(k*45)+")'/>"; }
+    return "<g transform='translate("+x+","+y+")'>"+
+      "<ellipse cx='0' cy='0' rx='62' ry='32' fill='"+fill+"' stroke='"+stroke+"' stroke-opacity='.6'"+dash+"/>"+
+      "<g transform='translate(-36,0)'><g class='"+(wire?"art-rotate-slow":"art-rotate")+"'>"+blades+
+      "<circle cx='0' cy='0' r='5' fill='"+(wire?"none":"var(--acc)")+"' "+(wire?"stroke='var(--acc)'":"")+"/></g>"+
+      "<circle cx='0' cy='0' r='24' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.6'"+dash+"/></g>"+
+    "</g>";
+  }
+  return wrap(
+    lamp(180, 54, false) + lamp(600, 54, false) +
+    /* реальный двигатель + техники */
+    engineShape(170, 96, false) +
+    "<rect x='100' y='126' width='10' height='30' fill='#101b2d'/><rect x='230' y='126' width='10' height='30' fill='#101b2d'/>"+
+    stand(70, 152, 1.0, true) + arm(78, 116) + stand(282, 152, 1.0, false) +
+    "<rect x='292' y='112' width='14' height='18' rx='2' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+ /* планшет техника */
+    "<text x='170' y='150' font-size='11' fill='var(--dim)' text-anchor='middle' font-family='Segoe UI'>ИЗДЕЛИЕ · борт 89512</text>"+
+    /* экран с двойником */
+    "<g transform='translate(470,30)'><rect x='0' y='0' width='290' height='118' rx='6' fill='#0c1626' stroke='var(--acc2)' stroke-opacity='.45'/>"+
+    "<text x='14' y='18' font-size='10' fill='var(--dim)' font-family='Segoe UI'>ЦИФРОВОЙ ДВОЙНИК · экземпляр 89512</text></g>"+
+    engineShape(615, 92, true) +
+    "<text x='615' y='138' font-size='10' fill='var(--acc2)' text-anchor='middle' font-family='Segoe UI'>модель следует за железом</text>"+
+    /* двусторонние связи: данные вправо, рекомендации влево */
+    "<path d='M 250 78 H 455' stroke='var(--acc2)' stroke-width='2' stroke-dasharray='7 7' class='art-flow'/>"+
+    "<path d='M 459 78 l -8 -4 v 8 Z' fill='var(--acc2)'/>"+
+    "<text x='352' y='70' font-size='9.5' fill='var(--acc2)' text-anchor='middle' font-family='Segoe UI'>данные</text>"+
+    "<path d='M 455 112 H 250' stroke='var(--acc)' stroke-width='2' stroke-dasharray='7 7' class='art-flow' style='animation-direction:reverse'/>"+
+    "<path d='M 246 112 l 8 -4 v 8 Z' fill='var(--acc)'/>"+
+    "<text x='352' y='128' font-size='9.5' fill='var(--acc)' text-anchor='middle' font-family='Segoe UI'>прогнозы и рекомендации</text>"+
+    floor()
+  );
+}
+
 /* ---------- карта «локация -> сцена» ---------- */
 var BYLOC = {
   "Кабинет директора": director,
@@ -503,6 +542,7 @@ var BYLOC = {
   "Производственный цех": assembly,
   "Натурный испытательный стенд": testcell,
   "Диспетчерская эксплуатации": ops,
+  "Изделие и его двойник": twinmirror,
   "Фабрика цифровых двойников": fab
 };
 
