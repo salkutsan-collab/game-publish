@@ -348,6 +348,101 @@ function testcenter(){
   );
 }
 
+/* Сборочный / производственный цех: двигатель на тележке, кран-балка, стеллажи */
+function assembly(){
+  return wrap(
+    "<rect x='0' y='0' width='800' height='12' fill='#0e1a2c'/>"+
+    "<rect x='150' y='12' width='8' height='22' fill='#0e1a2c'/><rect x='118' y='30' width='72' height='8' rx='3' fill='#152238'/>"+
+    "<line x1='138' y1='38' x2='138' y2='58' stroke='var(--line)' stroke-width='2'/><line x1='170' y1='38' x2='170' y2='58' stroke='var(--line)' stroke-width='2'/>"+
+    /* двигатель на сборочной тележке */
+    "<g transform='translate(154,104)'>"+
+      "<ellipse cx='0' cy='0' rx='58' ry='30' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.45'/>"+
+      "<g transform='translate(-34,0)'><g class='art-rotate-slow'>"+
+        (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.2' y='-20' width='2.4' height='17' rx='1.2' fill='var(--acc2)' opacity='.8' transform='rotate("+(k*45)+")'/>"; } return b; })() +
+      "<circle cx='0' cy='0' r='4' fill='var(--acc)'/></g>"+
+      "<circle cx='0' cy='0' r='22' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.6'/></g>"+
+    "</g>"+
+    "<rect x='104' y='132' width='100' height='6' rx='3' fill='#152238'/><circle cx='118' cy='146' r='6' fill='#101b2d'/><circle cx='190' cy='146' r='6' fill='#101b2d'/>"+
+    /* стеллажи с деталями */
+    "<g transform='translate(330,52)'><rect x='0' y='0' width='120' height='100' rx='3' fill='#0e1a2c' stroke='var(--line)'/>"+
+    (function(){ var s=""; for(var r=0;r<3;r++){ s+="<line x1='4' y1='"+(28+r*30)+"' x2='116' y2='"+(28+r*30)+"' stroke='var(--line)'/>";
+      for(var c=0;c<4;c++){ s+="<ellipse cx='"+(18+c*28)+"' cy='"+(20+r*30)+"' rx='10' ry='5' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.3'/>"; } } return s; })() +"</g>"+
+    /* стол ОТК с экраном */
+    "<g transform='translate(540,70)'><rect x='0' y='0' width='130 ' height='70' rx='4' fill='#0c1626' stroke='var(--line)'/>"+
+    "<text x='12' y='16' font-size='9' fill='var(--dim)' font-family='Segoe UI'>ПАСПОРТ ЭКЗЕМПЛЯРА</text>"+
+    "<rect x='12' y='24' width='80' height='4' rx='2' fill='var(--acc2)' opacity='.5'/>"+
+    "<rect x='12' y='33' width='100' height='4' rx='2' fill='var(--acc2)' opacity='.35'/>"+
+    "<rect x='12' y='42' width='66' height='4' rx='2' fill='var(--acc)' opacity='.55'/>"+
+    "<rect x='12' y='51' width='90' height='4' rx='2' fill='var(--acc2)' opacity='.35'/></g>"+
+    stand(290, 152, 1.05, true) + sit(600, 152, 1.0, false) + stand(710, 152, 1.0, true) +
+    lamp(250, 52, false) + lamp(600, 52, false) +
+    floor()
+  );
+}
+
+/* Натурный испытательный стенд: двигатель на станине, выхлоп, пульт за стеклом */
+function testcell(){
+  return wrap(
+    "<rect x='0' y='0' width='800' height='10' fill='#0e1a2c'/>"+
+    /* предупреждающие маяки */
+    "<circle cx='40' cy='26' r='5' fill='var(--bad)' class='art-flicker'/><circle cx='760' cy='26' r='5' fill='var(--bad)' class='art-flicker' style='animation-delay:1.2s'/>"+
+    /* двигатель на станине, слегка дрожит */
+    "<g class='art-shake'><g transform='translate(330,92)'>"+
+      "<ellipse cx='0' cy='0' rx='80' ry='38' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+      "<g transform='translate(-46,0)'><g class='art-rotate'>"+
+        (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.6' y='-28' width='3.2' height='24' rx='1.6' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*45)+")'/>"; } return b; })() +
+      "<circle cx='0' cy='0' r='6' fill='var(--acc)'/></g>"+
+      "<circle cx='0' cy='0' r='30' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.7'/></g>"+
+      /* выхлоп */
+      "<path d='M 82 -10 q 30 10 58 0 M 82 0 q 34 6 64 0 M 82 10 q 30 -8 58 0' stroke='var(--acc)' stroke-width='2.4' fill='none' opacity='.75' stroke-dasharray='8 6' class='art-flow'/>"+
+    "</g></g>"+
+    /* станина */
+    "<rect x='258' y='128' width='12' height='28' fill='#101b2d'/><rect x='390' y='128' width='12' height='28' fill='#101b2d'/>"+
+    "<rect x='240' y='124' width='180' height='8' rx='3' fill='#152238'/>"+
+    /* пультовая за стеклом */
+    "<g transform='translate(560,44)'>"+
+      "<rect x='0' y='0' width='190' height='100' rx='5' fill='rgba(79,195,247,.05)' stroke='var(--line)'/>"+
+      "<rect x='12' y='14' width='76' height='44' rx='3' fill='#0c1626' stroke='var(--line)'/>"+
+      "<polyline points='18,46 30,28 42,40 54,22 66,36 80,26' fill='none' stroke='var(--ok)' stroke-width='1.6' class='art-draw'/>"+
+      "<rect x='100' y='14' width='76' height='44' rx='3' fill='#0c1626' stroke='var(--line)'/>"+
+      "<text x='110' y='32' font-size='9' fill='var(--dim)' font-family='Segoe UI'>тяга, кН</text>"+
+      "<text x='110' y='50' font-size='15' fill='var(--acc2)' font-weight='700' font-family='Segoe UI' class='art-glow'>84.6</text>"+
+      (function(){ var s=""; var ppl=[[30,96],[90,96],[150,96]]; for(var k=0;k<3;k++){ s+="<g transform='translate("+ppl[k][0]+","+ppl[k][1]+") scale(0.78)'><circle cx='0' cy='-26' r='7.5' fill='#0a111d'/><path d='M -11 6 Q -11 -16 0 -16 Q 11 -16 11 6 Z' fill='#0a111d'/></g>"; } return s; })() +
+    "</g>"+
+    lamp(180, 54, false) +
+    floor()
+  );
+}
+
+/* Диспетчерская эксплуатации: карта полетов, дуги маршрутов, статусы бортов */
+function ops(){
+  /* дуги маршрутов с бегущими точками */
+  var arcs = "<g transform='translate(60,30)'>"+
+    "<rect x='0' y='0' width='420' height='110' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
+    "<text x='14' y='18' font-size='9.5' fill='var(--dim)' font-family='Segoe UI'>ФЛОТ · борта с двойниками онлайн</text>"+
+    "<path id='r1' d='M 30 88 Q 120 30 240 60' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.5' stroke-dasharray='4 5' class='art-flow'/>"+
+    "<path d='M 60 96 Q 200 50 390 80' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.5' stroke-dasharray='4 5' class='art-flow' style='animation-delay:.5s'/>"+
+    "<path d='M 140 100 Q 260 26 380 44' fill='none' stroke='var(--acc)' stroke-width='1.4' opacity='.6' stroke-dasharray='4 5' class='art-flow' style='animation-delay:1s'/>"+
+    "<circle cx='30' cy='88' r='3' fill='var(--ok)'/><circle cx='240' cy='60' r='3' fill='var(--ok)'/>"+
+    "<circle cx='60' cy='96' r='3' fill='var(--ok)'/><circle cx='390' cy='80' r='3' fill='var(--ok)'/>"+
+    "<circle cx='140' cy='100' r='3' fill='var(--ok)'/><circle cx='380' cy='44' r='3' fill='var(--warn)' class='art-flicker'/>"+
+  "</g>";
+  var board = "<g transform='translate(520,30)'>"+
+    "<rect x='0' y='0' width='220' height='110' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
+    "<text x='14' y='18' font-size='9.5' fill='var(--dim)' font-family='Segoe UI'>СТАТУС БОРТОВ</text>"+
+    (function(){ var s=""; var rows=[["89501","var(--ok)","норма"],["89507","var(--ok)","норма"],["89512","var(--warn)","вибрация: тренд"],["89519","var(--ok)","норма"]];
+      for(var k=0;k<4;k++){ s+="<circle cx='20' cy='"+(34+k*20)+"' r='3.5' fill='"+rows[k][1]+"'"+(k===2?" class='art-flicker'":"")+"/>"+
+        "<text x='32' y='"+(38+k*20)+"' font-size='10' fill='var(--txt)' font-family='Segoe UI'>"+rows[k][0]+"</text>"+
+        "<text x='84' y='"+(38+k*20)+"' font-size='10' fill='"+rows[k][1]+"' font-family='Segoe UI'>"+rows[k][2]+"</text>"; } return s; })() +
+  "</g>";
+  return wrap(
+    lamp(400, 64, false) +
+    arcs + board +
+    sit(240, 152, 1.0, true) + sit(420, 152, 1.0, false) + stand(620, 154, 1.05, true) +
+    floor()
+  );
+}
+
 /* ---------- карта «локация -> сцена» ---------- */
 var BYLOC = {
   "Кабинет директора": director,
@@ -360,6 +455,10 @@ var BYLOC = {
   "Вычислительный центр": hpccenter,
   "Испытательная лаборатория": lab,
   "Центр виртуальных испытаний": testcenter,
+  "Сборочный цех": assembly,
+  "Производственный цех": assembly,
+  "Натурный испытательный стенд": testcell,
+  "Диспетчерская эксплуатации": ops,
   "Фабрика цифровых двойников": fab
 };
 

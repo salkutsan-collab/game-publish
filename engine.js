@@ -41,6 +41,7 @@ function load(){
     s.flags = s.flags || {};
     if(s.flags.matrixReds===undefined && (s.defers||[]).some(function(d){ return d.indexOf("красных ячеек матрицы")>=0; })) s.flags.matrixReds = true;
     if(s.flags.gas===undefined && (s.defers||[]).some(function(d){ return d.indexOf("испытания встанут")>=0; })) s.flags.gas = "none";
+    if(s.flags.twinDone===undefined && (s.defers||[]).some(function(d){ return d.indexOf("готовый двойник")>=0; })) s.flags.twinDone = "promised";
     return s;
   }catch(e){ return null; }
 }
@@ -598,6 +599,120 @@ function validPick(k){
   save(); renderValid(sc); renderTop(sc); renderSide();
 }
 
+/* ---------- ntest: протокол натурного испытания (акт 8) ---------- */
+function renderNtest(sc){
+  var st = S.ui.nt || (S.ui.nt = { i:0, recs:[], done:false });
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(NTEST.intro)+"</div>";
+  html += "<div class='findings'>";
+  for(var k=0;k<st.recs.length;k++){
+    var r = st.recs[k], step = NTEST.steps[r.i];
+    html += "<div class='find' style='border-left-color:"+(r.fired?"var(--bad)":"var(--ok)")+"'>"+
+      "<b style='color:"+(r.fired?"var(--bad)":"var(--ok)")+"'>Шаг "+(r.i+1)+" · "+esc(step.t)+":</b> "+
+      esc(r.fired ? step.bad : step.ok)+"</div>";
+  }
+  html += "</div>";
+  if(st.done){
+    var anyFired = st.recs.some(function(r){ return r.fired; });
+    var sum = anyFired ? NTEST.dirty : NTEST.clean;
+    html += "<div class='verdict show "+(anyFired?"weak":"good")+"'><b>"+esc(sum.t)+".</b> "+esc(sum.d)+"</div>";
+  }
+  var label = st.done ? "Продолжить" : (st.i===0 ? "▶ Начать испытания" : "Следующий шаг протокола");
+  shell(sc, html, nextBtnHtml(label, true));
+}
+function ntestStep(sc){
+  var st = S.ui.nt;
+  if(st.done){ goNext(sc); return; }
+  if(st.i < NTEST.steps.length){
+    var step = NTEST.steps[st.i];
+    var fired = !!(step.fire && step.fire(S.flags, S.arts));
+    if(fired && step.fx) applyFx(step.fx);
+    st.recs.push({ i:st.i, fired:fired });
+    logEv("ntest",{ step:st.i, fired:fired });
+    st.i++;
+    if(st.i === NTEST.steps.length){
+      st.done = true;
+      var anyFired = st.recs.some(function(r){ return r.fired; });
+      applyFx((anyFired ? NTEST.dirty : NTEST.clean).fx);
+      applyFx({flag:{testClean: !anyFired}});
+      logEv("ntestDone",{ clean:!anyFired });
+    }
+    save(); renderNtest(sc); renderTop(sc); renderSide();
+  }
+}
+
+/* ---------- sens: расстановка датчиков (акт 10) ---------- */
+function renderSens(sc){
+  var st = S.ui.sn || (S.ui.sn = { sel:[], runs:0, done:false, virt:false });
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(SENS.intro)+"</div>";
+  html += "<div class='choices' style='grid-template-columns:repeat(auto-fit,minmax(200px,1fr))'>";
+  SENS.spots.forEach(function(sp,i){
+    var on = st.sel.indexOf(i)>=0;
+    var imp = sp.kind==="imp";
+    var missNow = st.miss && st.miss.indexOf(i)>=0;
+    html += "<div class='card"+(on?" sel":"")+(missNow?" " : "")+"' "+(missNow?"style='border-color:rgba(255,209,102,.6)'":"")+
+      " onclick='G.sensPick("+i+")'><h4>"+(imp?"🚫 ":"📡 ")+esc(sp.t)+"</h4>"+esc(sp.d)+
+      (imp && st.virt ? "<div class='cost'><i class='note'>виртуальный датчик подключен</i></div>" : "")+
+      (missNow && SENS.whyJunk[sp.id] ? "<div class='cost'><i class='note'>"+esc(SENS.whyJunk[sp.id])+"</i></div>" : "")+
+      "</div>";
+  });
+  html += "</div>";
+  html += "<div class='mxstatus'>Каналов занято: <b>"+st.sel.length+" из "+SENS.channels+"</b>"+
+    (st.virt ? " · <span style='color:var(--acc2)'>+ виртуальный датчик в камере сгорания (канал не нужен)</span>" : "")+"</div>";
+  html += "<div class='verdict' id='verdict'></div>";
+  html += "<div class='hint' id='hintbox'><b>Гарин:</b> "+esc(SENS.hint)+"</div>";
+  if(st.done){
+    html += "<div class='verdict show good'><b>Гарин:</b> телеметрия совпала с картой критических зон из акта 6: модель сама подсказала, где слушать изделие. Это и есть осмысленные данные вместо больших.</div>";
+  }
+  var foot = st.done
+    ? nextBtnHtml("Продолжить", true)
+    : hintBtnHtml() + "<button class='nextbtn"+(st.sel.length===SENS.channels?" ready":"")+"' id='nextbtn' onclick='G.sensLaunch()'>📡 Подключить телеметрию</button>";
+  shell(sc, html, foot);
+}
+function sensPick(i){
+  var st = S.ui.sn; if(st.done) return;
+  var sp = SENS.spots[i];
+  if(sp.kind==="imp"){
+    if(!st.virt){
+      st.virt = true;
+      applyFx({gloss:["vsens"]});
+      logEv("sens",{virt:true});
+    }
+    save(); renderSens(STORY.scenes[S.scene]);
+    var v = el("verdict");
+    v.className = "verdict show good";
+    v.innerHTML = "<b>Гарин:</b> в камере сгорания физический датчик не живет - там работает ВИРТУАЛЬНЫЙ датчик: расчетная точка на модели, значение восстанавливается по соседним измерениям. Канал телеметрии не тратится.";
+    return;
+  }
+  var ix = st.sel.indexOf(i);
+  if(ix>=0) st.sel.splice(ix,1);
+  else { if(st.sel.length>=SENS.channels) return; st.sel.push(i); }
+  if(st.miss){ var mi = st.miss.indexOf(i); if(mi>=0) st.miss.splice(mi,1); }
+  save(); renderSens(STORY.scenes[S.scene]);
+}
+function sensLaunch(){
+  var sc = STORY.scenes[S.scene], st = S.ui.sn;
+  if(st.done || st.sel.length!==SENS.channels) return;
+  st.runs++;
+  if(st.runs===1 && sc.cost) applyFx({budget:sc.cost.budget||0, weeks:sc.cost.weeks||0});
+  var miss = st.sel.filter(function(i){ return SENS.spots[i].kind!=="crit"; });
+  if(miss.length){
+    st.miss = miss;
+    applyFx({budget:-2});
+    logEv("sens",{run:st.runs, miss:miss.length});
+    save(); renderSens(sc); renderTop(sc);
+    var v = el("verdict");
+    v.className = "verdict show weak";
+    v.innerHTML = "<b>Гарин:</b> "+miss.length+" "+(miss.length===1?"канал занят":"канала заняты")+" не тем - смотри пометки на карточках и сверься с картой критических зон. Перенастройка - минус два миллиона.";
+    return;
+  }
+  st.done = true; st.miss = null;
+  applyFx({adeq:10, trust:4, tech:{sens:"have"}});
+  logEv("sens",{run:st.runs, done:true, hint:!!S.ui.hintUsed});
+  save(); renderSens(sc); renderTop(sc); renderSide();
+}
+
 /* ---------- result: итог акта ---------- */
 function renderResult(sc){
   var a = null; ARTS.forEach(function(x){ if(x.id===sc.award.art) a=x; });
@@ -643,6 +758,8 @@ function render(){
   else if(sc.type==="matrix") renderMatrix(sc);
   else if(sc.type==="tree") renderTree(sc);
   else if(sc.type==="camp") renderCamp(sc);
+  else if(sc.type==="ntest") renderNtest(sc);
+  else if(sc.type==="sens") renderSens(sc);
   else if(sc.type==="diag") renderDiag(sc);
   else if(sc.type==="valid") renderValid(sc);
   else if(sc.type==="result") renderResult(sc);
@@ -709,6 +826,8 @@ return {
     else if(sc.type==="matrix") confirmMatrix(sc);
     else if(sc.type==="tree") confirmTree(sc);
     else if(sc.type==="camp"){ if(S.ui.cp && S.ui.cp.done) goNext(sc); }
+    else if(sc.type==="ntest") ntestStep(sc);
+    else if(sc.type==="sens"){ if(S.ui.sn && S.ui.sn.done) goNext(sc); }
     else if(sc.type==="diag"){ if(S.ui.dg && S.ui.dg.concluded) goNext(sc); }
     else if(sc.type==="valid"){ if(S.ui.vd && S.ui.vd.resolved) goNext(sc); }
     else if(sc.type==="result") goNext(sc);
@@ -726,6 +845,7 @@ return {
   pick: pick, just: just, talk: talk, slide: slide,
   treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
   campSel: campSel, campLaunch: campLaunch,
+  sensPick: sensPick, sensLaunch: sensLaunch,
   gotoAct: function(id){
     var i = actIdx(id);
     if(i<0 || i>actIdx(S.maxActId||"p")) return;
