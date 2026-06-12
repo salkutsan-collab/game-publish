@@ -10,6 +10,69 @@ var WEEKS_TOTAL = 52;
 var S = null;          // состояние игры
 var prevRes = null;    // прошлые значения ресурсов (для стрелок-дельт)
 
+/* Авто-отправка отчета преподавателю - БЕЗ действий игрока: на финале
+   и при закрытии страницы. Та же гугл-форма, что у тренажера «Фабрика
+   цифровых двойников»: ответ ложится строкой в таблицу формы (а если в
+   форме включены уведомления - приходит письмом на почту владельца).
+   Сменить форму: взять «заполненную ссылку» новой формы и обновить url
+   + entry-id. Вместо формы можно указать endpoint (Formspree/webhook,
+   POST JSON) - тогда url формы оставить пустым. */
+var ANALYTICS = {
+  googleForm: {
+    url: "https://docs.google.com/forms/d/e/1FAIpQLScf9j-oP3YxrzCKCvR2gG9L-TetPSii_Y60kqrw0nkxHO0IGw/formResponse",
+    fields: {
+      player:       "entry.1517313908",
+      izdelie:      "entry.392570465",
+      stationsDone: "entry.1173437971",
+      readiness:    "entry.1631590768",
+      report:       "entry.326757868"
+    }
+  },
+  endpoint: ""
+};
+function analyticsOn(){ return !!((ANALYTICS.googleForm && ANALYTICS.googleForm.url) || ANALYTICS.endpoint); }
+function makeReport(reason){
+  var pr = projRank();
+  return {
+    игра:"Путь двойника", версия:"полный сюжет (пролог + 10 актов + финал)",
+    причина:reason||"",
+    слушатель:S.name, начало:new Date(S.started).toISOString(),
+    достигнут_акт:(ACTS[Math.max(0, actIdx(S.maxActId||"p"))]||{}).t || "Пролог",
+    итог:{ звание:pr.rank, балл:pr.score, недели:S.res.weeks, бюджет_млн:S.res.budget,
+      ядро_часы:S.res.cores, доверие:S.res.trust, адекватность:S.res.adeq },
+    артефакты:S.arts, неисправленные_последствия:S.defers,
+    решения:S.log.filter(function(e){ return ["choice","valid","diagConclude","matrix","camp","sens","redo","essayReject"].indexOf(e.type)>=0; }),
+    эссе:(S.log.filter(function(e){ return e.type==="essay"; })[0]||null),
+    подсказки:S.log.filter(function(e){ return e.type==="hint"; }).length,
+    полный_лог:S.log
+  };
+}
+function sendReport(reason, useBeacon){
+  if(!S || !analyticsOn()) return false;
+  var rep = makeReport(reason);
+  var gf = ANALYTICS.googleForm;
+  try{
+    if(gf && gf.url){
+      var prm = new URLSearchParams();
+      prm.append(gf.fields.player, S.name||"");
+      prm.append(gf.fields.izdelie, "игра «Путь двойника» · авиадвигатель (ГТД)");
+      prm.append(gf.fields.stationsDone, rep.достигнут_акт);
+      prm.append(gf.fields.readiness, rep.итог.балл+"/100 · "+rep.итог.звание);
+      prm.append(gf.fields.report, JSON.stringify(rep));
+      if(useBeacon && navigator.sendBeacon){ navigator.sendBeacon(gf.url, prm); }
+      else { fetch(gf.url, { method:"POST", mode:"no-cors", body:prm, keepalive:true }).catch(function(){}); }
+      return true;
+    }
+    if(ANALYTICS.endpoint){
+      var body = JSON.stringify(rep);
+      if(useBeacon && navigator.sendBeacon){ navigator.sendBeacon(ANALYTICS.endpoint, new Blob([body], {type:"application/json"})); }
+      else { fetch(ANALYTICS.endpoint, { method:"POST", headers:{"Content-Type":"application/json","Accept":"application/json"}, body:body, keepalive:true }).catch(function(){}); }
+      return true;
+    }
+  }catch(e){ return false; }
+  return false;
+}
+
 /* ---------- состояние ---------- */
 function freshState(name){
   return {
@@ -749,52 +812,125 @@ function sensLaunch(){
   save(); renderSens(sc); renderTop(sc); renderSide();
 }
 
-/* ---------- review: разбор полетов - дерево решений + рефлексия (финал) ---------- */
+/* ---------- review: разбор полетов - интерактивная карта игры (финал) ----------
+   Верхний ряд - все акты и переходы между ними (архитектура игры целиком),
+   под актами - развилки решений. Узел кликабелен: панель показывает решение,
+   разбор Гарина и - если последствие еще активно - кнопку точечного исправления. */
 function decisionOf(scene){
   /* последнее событие решения по сцене */
   var ev = null;
   S.log.forEach(function(e){
     if(e.scene!==scene) return;
-    if(e.type==="choice" || e.type==="valid" || e.type==="diagConclude") ev = { opt:(e.opt||""), q:e.q };
+    if(e.type==="choice" || e.type==="diagConclude") ev = { opt:(e.opt||""), q:e.q };
+    if(e.type==="valid"){
+      var o = null; A5VALID.options.forEach(function(x){ if(x.id===e.opt) o = x; });
+      ev = { opt:(o ? o.t : (e.opt||"")), q:e.q };
+    }
     if(e.type==="matrix") ev = { opt:(e.green===e.total ? "Все показатели в допуске" : "Утверждена с красными ячейками ("+(e.total-e.green)+")"), q:(e.green===e.total ? "good":"bad") };
   });
   return ev;
 }
-function reviewTreeSvg(rows){
-  var n = rows.length, step = 84, W = 60+n*step, H = 300, y0 = 150;
+function stripEmoji(s){ return String(s).replace(/^[^\wа-яё]+\s*/i,""); }
+/* активные последствия -> развилка, на которой они родились (по логу) */
+function deferLinks(){
+  var links = {};
+  S.defers.forEach(function(dt, i){
+    var org = null;
+    S.log.forEach(function(e){ if(e.type==="defer" && e.text===dt) org = e.scene; });
+    var di = -1;
+    DECISIONS.forEach(function(d, k){ if(di<0 && d.scene===org) di = k; });
+    if(di<0 && org){ /* последствие из сцены-сателлита - вешаем на развилку того же акта */
+      var act = sceneActId(org);
+      DECISIONS.forEach(function(d, k){ if(di<0 && sceneActId(d.scene)===act) di = k; });
+    }
+    if(di<0) return;
+    var rd = null; REDO.forEach(function(r){ if(!rd && dt.indexOf(r.match)>=0) rd = r; });
+    (links[di] = links[di]||[]).push({ i:i, redo:rd, text:dt });
+  });
+  return links;
+}
+function reviewMapSvg(rows, links, sel){
+  var colW = 132, x0 = 16, W = x0 + ACTS.length*colW + 12, H = 246;
+  var yAct = 34, actH = 36, yDot = 138, dotGap = 62;
   var qcol = { good:"var(--ok)", weak:"var(--warn)", bad:"var(--bad)" };
-  var path = "", nodes = "", labels = "";
-  for(var i=0;i<n;i++){
-    var x = 60+i*step, r = rows[i];
-    if(i>0) path += "<line x1='"+(x-step)+"' y1='"+y0+"' x2='"+x+"' y2='"+y0+"' stroke='var(--acc)' stroke-width='2.4' opacity='.85'/>";
-    /* непройденные ветки - серые, вверх и вниз */
-    nodes += "<path d='M "+x+" "+y0+" Q "+(x+26)+" "+(y0-46)+" "+(x+44)+" "+(y0-62)+"' fill='none' stroke='var(--line)' stroke-width='1.4'/>"+
-             "<circle cx='"+(x+44)+"' cy='"+(y0-62)+"' r='4' fill='var(--faint)'/>"+
-             "<path d='M "+x+" "+y0+" Q "+(x+26)+" "+(y0+46)+" "+(x+44)+" "+(y0+62)+"' fill='none' stroke='var(--line)' stroke-width='1.4'/>"+
-             "<circle cx='"+(x+44)+"' cy='"+(y0+62)+"' r='4' fill='var(--faint)'/>";
-    var col = r.ev ? (qcol[r.ev.q]||"var(--acc2)") : "var(--faint)";
-    nodes += "<circle cx='"+x+"' cy='"+y0+"' r='9' fill='"+col+"' stroke='#0a111d' stroke-width='2'><title>"+esc(r.d.t+": "+(r.ev?r.ev.opt:"-"))+"</title></circle>";
-    var up = (i%2===0);
-    labels += "<text x='"+x+"' y='"+(up? y0-84 : y0+92)+"' font-size='10' fill='var(--dim)' text-anchor='middle' font-family='Segoe UI'>"+esc(r.d.short)+"</text>"+
-      "<line x1='"+x+"' y1='"+(up? y0-12 : y0+12)+"' x2='"+x+"' y2='"+(up? y0-72 : y0+78)+"' stroke='var(--line)' stroke-dasharray='2 4' opacity='.5'/>";
+  var maxI = actIdx(S.maxActId||"p");
+  var grouped = {}; rows.forEach(function(r,k){ (grouped[r.act] = grouped[r.act]||[]).push(k); });
+  var svg = "<defs><marker id='revarr' viewBox='0 0 8 8' refX='7' refY='4' markerWidth='7' markerHeight='7' orient='auto'>"+
+    "<path d='M0 0 L8 4 L0 8 z' fill='var(--faint)'/></marker></defs>";
+  svg += "<text x='"+x0+"' y='18' font-size='10.5' fill='var(--dim)' font-family='Segoe UI'>АРХИТЕКТУРА ИГРЫ · сверху - акты и переходы, ниже - развилки решений (нажимайте на кружки): "+
+    "зеленый - сильное, желтый - спорное, красный - ошибка, серый - не пройдено; ⚠ - активное последствие, можно исправить</text>";
+  ACTS.forEach(function(a, ai){
+    var cx = x0 + ai*colW + colW/2, rx = cx-58, rw = 116;
+    var reached = ai<=maxI;
+    var parts = a.t.split("·"), l1 = parts[0].trim(), l2 = (parts[1]||"").trim();
+    if(ai>0) svg += "<line x1='"+(rx-14)+"' y1='"+(yAct+actH/2)+"' x2='"+(rx-3)+"' y2='"+(yAct+actH/2)+"' stroke='"+(reached?"var(--acc)":"var(--line)")+"' stroke-width='2' marker-end='url(#revarr)'/>";
+    svg += "<rect x='"+rx+"' y='"+yAct+"' width='"+rw+"' height='"+actH+"' rx='8' fill='"+(reached?"var(--panel2)":"#0e1626")+"' stroke='"+(reached?"var(--acc)":"var(--line)")+"' stroke-width='1.2'/>"+
+      "<text x='"+cx+"' y='"+(yAct+15)+"' font-size='9.5' font-weight='700' fill='"+(reached?"var(--txt)":"var(--faint)")+"' text-anchor='middle' font-family='Segoe UI'>"+esc(l1)+"</text>"+
+      (l2?"<text x='"+cx+"' y='"+(yAct+28)+"' font-size='8.5' fill='var(--dim)' text-anchor='middle' font-family='Segoe UI'>"+esc(l2)+"</text>":"");
+    var ks = grouped[a.id]||[];
+    if(ks.length) svg += "<line x1='"+cx+"' y1='"+(yAct+actH)+"' x2='"+cx+"' y2='"+(yDot+(ks.length-1)*dotGap)+"' stroke='var(--line)' stroke-dasharray='2 4' opacity='.6'/>";
+    ks.forEach(function(k, j){
+      var r = rows[k], cy = yDot + j*dotGap;
+      var col = r.ev ? (qcol[r.ev.q]||"var(--acc2)") : "var(--faint)";
+      svg += "<g class='revdot"+(sel===k?" sel":"")+"' id='revdot"+k+"' onclick='G.reviewNode("+k+")' style='cursor:pointer'>";
+      if(links[k]) svg += "<circle cx='"+cx+"' cy='"+cy+"' r='15' fill='none' stroke='var(--warn)' stroke-width='1.6' stroke-dasharray='3 3'/>"+
+        "<text x='"+(cx+12)+"' y='"+(cy-12)+"' font-size='12'>⚠</text>";
+      svg += "<circle class='dotmain' cx='"+cx+"' cy='"+cy+"' r='9' fill='"+col+"' stroke='#0a111d' stroke-width='2'>"+
+        "<title>"+esc(r.d.t+": "+(r.ev ? stripEmoji(r.ev.opt) : "не пройдено"))+"</title></circle>"+
+        "<text x='"+cx+"' y='"+(cy+24)+"' font-size='9' fill='var(--dim)' text-anchor='middle' font-family='Segoe UI'>"+esc(r.d.short)+"</text></g>";
+    });
+  });
+  return "<div style='overflow-x:auto'><svg viewBox='0 0 "+W+" "+H+"' style='min-width:"+W+"px;height:"+H+"px;background:#0c1626;border:1px solid var(--line);border-radius:12px'>"+svg+"</svg></div>";
+}
+function actName(id){ var t = ""; ACTS.forEach(function(a){ if(a.id===id) t = a.t; }); return t; }
+function reviewPanelHtml(rows, links, sel){
+  if(sel==null || !rows[sel])
+    return "<div class='counter' style='margin-top:0'>Нажмите на развилку (кружок) на карте: откроется ваше решение, разбор Гарина и - если последствие еще активно - кнопка точечного исправления.</div>";
+  var r = rows[sel], lk = links[sel]||[];
+  var actI = actIdx(r.act), open = actI>=0 && actI<=actIdx(S.maxActId||"p");
+  var qname = { good:"сильное решение", weak:"спорное решение", bad:"ошибка" };
+  var qcolC = { good:"var(--ok)", weak:"var(--warn)", bad:"var(--bad)" };
+  var h = "<div class='revhead'><b>"+esc(r.d.t)+"</b> <span style='color:var(--faint)'>· "+esc(actName(r.act))+"</span></div>";
+  if(r.ev){
+    var col = qcolC[r.ev.q]||"var(--acc2)";
+    h += "<div class='revrow'>Ваше решение: <b style='color:"+col+"'>"+esc(stripEmoji(r.ev.opt))+"</b> "+
+      "<span class='tag' style='border:1px solid "+col+";color:"+col+"'>"+(qname[r.ev.q]||"")+"</span></div>";
+    var refl = r.d.refl[r.ev.q];
+    if(refl) h += "<div class='revrow' style='color:var(--dim)'><b>Гарин:</b> "+esc(refl)+"</div>";
+  } else {
+    h += "<div class='revrow' style='color:var(--faint)'>Эта развилка в вашем прохождении не сыграна: путь прошел другой веткой либо акт еще впереди.</div>";
   }
-  return "<div style='overflow-x:auto'><svg viewBox='0 0 "+W+" "+H+"' style='min-width:"+W+"px;height:"+H+"px;background:#0c1626;border:1px solid var(--line);border-radius:12px'>"+
-    "<line x1='20' y1='"+y0+"' x2='60' y2='"+y0+"' stroke='var(--acc)' stroke-width='2.4' opacity='.85'/>"+
-    path + labels + nodes +
-    "<text x='24' y='24' font-size='11' fill='var(--dim)' font-family='Segoe UI'>ПУТЬ ПРОЕКТА · цвет узла: зеленый - сильное решение, желтый - спорное, красный - ошибка; серые ветки - непройденные варианты</text>"+
-  "</svg></div>";
+  lk.forEach(function(f){
+    h += "<div class='revrow' style='color:var(--warn)'>⚠ Активное последствие: "+esc(f.text)+"</div>";
+    if(f.redo){
+      var price = [(f.redo.cost.budget?(-f.redo.cost.budget)+" млн":""),(f.redo.cost.weeks?f.redo.cost.weeks+" нед":"")].filter(Boolean).join(" + ")||"бесплатно";
+      h += "<div class='revrow'><span class='tag have' style='cursor:pointer' onclick='G.redoFix("+f.i+")'>исправить · "+esc(price)+"</span> "+
+        "<span style='font-size:11px;color:var(--dim)'>"+esc(f.redo.t)+"</span></div>";
+    }
+  });
+  if(r.ev && !lk.length && r.ev.q!=="good")
+    h += "<div class='revrow' style='font-size:11.5px;color:var(--faint)'>Активных последствий по этой развилке не осталось: либо уже исправлено, либо расплата случилась и учтена.</div>";
+  if(open) h += "<div class='revrow'><span class='tag rent' style='cursor:pointer' onclick=\"G.gotoAct('"+r.act+"')\">открыть этот акт заново</span> "+
+    "<span style='font-size:11px;color:var(--faint)'>ресурсы сохранятся как есть</span></div>";
+  return h;
+}
+function reviewRows(){
+  return DECISIONS.map(function(d){ return { d:d, ev:decisionOf(d.scene), act:sceneActId(d.scene) }; });
 }
 function renderReview(sc){
-  var rows = DECISIONS.map(function(d){ return { d:d, ev:decisionOf(d.scene) }; }).filter(function(r){ return r.ev; });
+  var rows = reviewRows(), links = deferLinks();
+  var sel = (S.ui.rsel!=null) ? S.ui.rsel : null;
   var html = "<div class='task'>"+sub(sc.task)+"</div>";
-  html += "<div style='padding:0 18px'>"+reviewTreeSvg(rows)+"</div>";
-  html += "<div class='need'>Принцип платформы с ядром SPDM: к любой развилке можно вернуться ТОЧЕЧНО - изменились условия, меняется одно решение и его связи, а не весь проект. Активные последствия и кнопки исправления - на вкладке «Акты».</div>";
+  html += "<div style='padding:0 18px'>"+reviewMapSvg(rows, links, sel)+"</div>";
+  html += "<div class='revpanel' id='revpanel'>"+reviewPanelHtml(rows, links, sel)+"</div>";
+  html += "<div class='need'>Принцип платформы с ядром SPDM: к любой развилке можно вернуться ТОЧЕЧНО - изменились условия, меняется одно решение и его связи, а не весь проект. Нажмите узел на карте: исправление - кнопкой прямо в панели разбора (дублируется на вкладке «Акты»).</div>";
   html += "<div class='findings'>"+rows.map(function(r){
+    if(!r.ev) return "";
     var refl = r.d.refl[r.ev.q] || "";
     if(!refl) return "";
     var col = r.ev.q==="good" ? "var(--ok)" : (r.ev.q==="weak" ? "var(--warn)" : "var(--bad)");
     return "<div class='find' style='border-left-color:"+col+"'><b style='color:"+col+"'>"+esc(r.d.t)+":</b> "+
-      "<span style='color:var(--txt)'>"+esc(r.ev.opt.replace(/^[^\s]+\s/,""))+"</span><br>"+esc(refl)+"</div>";
+      "<span style='color:var(--txt)'>"+esc(stripEmoji(r.ev.opt))+"</span><br>"+esc(refl)+"</div>";
   }).join("")+"</div>";
   shell(sc, html, nextBtnHtml("К эпилогу", true));
 }
@@ -1007,8 +1143,21 @@ function goNext(sc){
   if(nsc.clearDefer){ removeDefers(nsc.clearDefer); }
   if(nsc.type==="result" && nsc.award){ applyFx({art:nsc.award.art}); }
   logEv("enter",{});
+  /* финал пройден - отчет уходит преподавателю сам, без действий игрока */
+  if(nsc.type==="end" && nsc.final && !S.reportSent){
+    S.reportSent = !!sendReport("финал");
+  }
   save(); render();
 }
+/* страховка: при закрытии/сворачивании страницы отчет уходит маяком
+   (sendBeacon) с текущим прогрессом - даже если игрок не дошел до финала */
+var _exitSent = false;
+function sendOnExit(){
+  if(_exitSent) return;
+  if(S && S.log && S.log.length && analyticsOn()){ _exitSent = true; sendReport("выход", true); }
+}
+window.addEventListener("pagehide", sendOnExit);
+window.addEventListener("beforeunload", sendOnExit);
 
 /* ---------- публичный интерфейс ---------- */
 return {
@@ -1070,6 +1219,14 @@ return {
     elTab.classList.add("on");
     el(elTab.getAttribute("data-pane")).classList.add("on");
   },
+  reviewNode: function(k){
+    S.ui.rsel = k; save();
+    /* панель и подсветка обновляются точечно - прокрутка карты не сбрасывается */
+    var p = el("revpanel");
+    if(p) p.innerHTML = reviewPanelHtml(reviewRows(), deferLinks(), k);
+    document.querySelectorAll(".revdot").forEach(function(g){ g.classList.remove("sel"); });
+    var g = el("revdot"+k); if(g) g.classList.add("sel");
+  },
   pick: pick, just: just, talk: talk, slide: slide,
   treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
   campSel: campSel, campLaunch: campLaunch,
@@ -1087,20 +1244,12 @@ return {
     save();
     var sc = STORY.scenes[S.scene];
     renderTop(sc); renderSide();
+    /* если исправляли с карты разбора - перерисовать карту (узел ⚠ гаснет) */
+    if(sc.type==="review") renderReview(sc);
   },
   report: function(){
-    var pr = projRank();
-    var rep = {
-      игра:"Путь двойника", версия:"полный сюжет (пролог + 10 актов + финал)",
-      слушатель:S.name, начало:new Date(S.started).toISOString(),
-      итог:{ звание:pr.rank, балл:pr.score, недели:S.res.weeks, бюджет_млн:S.res.budget,
-        ядро_часы:S.res.cores, доверие:S.res.trust, адекватность:S.res.adeq },
-      артефакты:S.arts, неисправленные_последствия:S.defers,
-      решения:S.log.filter(function(e){ return ["choice","valid","diagConclude","matrix","camp","sens","redo","essayReject"].indexOf(e.type)>=0; }),
-      эссе:(S.log.filter(function(e){ return e.type==="essay"; })[0]||null),
-      подсказки:S.log.filter(function(e){ return e.type==="hint"; }).length,
-      полный_лог:S.log
-    };
+    sendReport("кнопка");  // дублируем в форму преподавателя, если отправка настроена
+    var rep = makeReport("кнопка");
     var blob = new Blob([JSON.stringify(rep, null, 2)], {type:"application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
