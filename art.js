@@ -323,16 +323,60 @@ function lab(){
   );
 }
 
-/* Центр виртуальных испытаний: стена экранов с бегущими испытаниями, счетчик */
+/* Центр виртуальных испытаний: стена экранов с РАЗНЫМИ испытаниями
+   (вентилятор, лопатка под нагрузкой, поток через двигатель, полигонная
+   траектория, вибростенд), счетчик выполненных испытаний */
+function vtScreen(type, d){
+  /* содержимое одного экрана 80x46, локальные координаты */
+  if(type===0){ /* вентилятор: виртуальный стенд обдува */
+    return "<g transform='translate(26,23)'><g class='art-rotate-slow' style='animation-delay:"+d+"s'>"+
+      (function(){ var b=""; for(var k=0;k<6;k++){ b+="<rect x='-1.1' y='-13' width='2.2' height='11' rx='1.1' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*60)+")'/>"; } return b; })()+
+      "<circle cx='0' cy='0' r='3' fill='var(--acc)'/></g>"+
+      "<circle cx='0' cy='0' r='15' fill='none' stroke='var(--acc2)' stroke-width='1' opacity='.5'/></g>"+
+      "<path d='M 48 12 H 72 M 48 23 H 74 M 48 34 H 72' stroke='var(--acc2)' stroke-width='1.3' opacity='.6' stroke-dasharray='4 5' class='art-flow'/>";
+  }
+  if(type===1){ /* лопатка: зоны нагрузки пульсируют */
+    return "<g transform='translate(28,42)'>"+
+      "<path d='M -6 0 L -4 -30 Q 2 -36 8 -30 L 6 0 Z' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+      "<ellipse cx='1' cy='-26' rx='4' ry='5' fill='var(--bad)' opacity='.55' class='art-glow' style='animation-delay:"+d+"s'/>"+
+      "<ellipse cx='0' cy='-12' rx='4.5' ry='6' fill='var(--warn)' opacity='.45' class='art-glow' style='animation-delay:"+(d+1)+"s'/>"+
+      "<rect x='-8' y='0' width='18' height='4' rx='1.5' fill='#101b2d'/></g>"+
+      "<text x='46' y='16' font-size='7.5' fill='var(--dim)' font-family='Segoe UI'>зоны</text>"+
+      "<text x='46' y='26' font-size='7.5' fill='var(--dim)' font-family='Segoe UI'>нагрузки</text>"+
+      "<rect x='46' y='32' width='8' height='5' fill='var(--bad)' opacity='.6'/><rect x='56' y='32' width='8' height='5' fill='var(--warn)' opacity='.5'/><rect x='66' y='32' width='8' height='5' fill='var(--ok)' opacity='.5'/>";
+  }
+  if(type===2){ /* двигатель в разрезе: поток бежит сквозь */
+    return "<g transform='translate(40,23)'>"+
+      "<ellipse cx='0' cy='0' rx='26' ry='13' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+      "<ellipse cx='-16' cy='0' rx='4' ry='9' fill='none' stroke='var(--acc2)' stroke-width='1' opacity='.7'/>"+
+      "<path d='M -34 -5 H -28 M -34 0 H -27 M -34 5 H -28' stroke='var(--acc2)' stroke-width='1.2' opacity='.7' stroke-dasharray='3 4' class='art-flow'/>"+
+      "<path d='M 26 -4 H 36 M 26 0 H 38 M 26 4 H 36' stroke='var(--acc)' stroke-width='1.4' opacity='.8' stroke-dasharray='4 4' class='art-flow' style='animation-delay:"+(d*0.4)+"s'/></g>";
+  }
+  if(type===3){ /* цифровой полигон: траектория полета */
+    return "<line x1='6' y1='38' x2='74' y2='38' stroke='var(--line)'/>"+
+      "<path d='M 8 36 Q 26 12 44 16 Q 62 20 72 10' fill='none' stroke='var(--acc2)' stroke-width='1.3' opacity='.7' stroke-dasharray='4 4' class='art-flow'/>"+
+      "<path d='M 66 13 l 8 -3 l -6 5 l -1 3 Z' fill='var(--acc)' opacity='.9'/>"+
+      "<text x='8' y='12' font-size='7.5' fill='var(--dim)' font-family='Segoe UI'>полигон: цикл</text>"+
+      "<rect x='30' y='36' width='6' height='2.5' fill='var(--acc2)' opacity='.5'/><rect x='52' y='36' width='6' height='2.5' fill='var(--acc2)' opacity='.5'/>";
+  }
+  /* вибростенд: деталь дрожит на столе */
+  return "<g transform='translate(40,40)'>"+
+    "<rect x='-22' y='0' width='44' height='4' rx='1.5' fill='#101b2d'/>"+
+    "<g class='art-shake' style='animation-delay:"+d+"s'>"+
+      "<rect x='-12' y='-7' width='24' height='5' rx='1.5' fill='#1b2a44' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+      "<path d='M -2 -7 L -1 -20 Q 2 -23 5 -20 L 4 -7 Z' fill='var(--acc2)' opacity='.85'/>"+
+    "</g></g>"+
+    "<path d='M 8 12 q 4 -7 8 0 q 4 7 8 0 q 4 -7 8 0' fill='none' stroke='var(--ok)' stroke-width='1.2' opacity='.7' stroke-dasharray='3 3' class='art-wave'/>"+
+    "<text x='44' y='15' font-size='7.5' fill='var(--dim)' font-family='Segoe UI'>вибростенд</text>";
+}
 function testcenter(){
   var screens = "";
   for(var r=0;r<2;r++) for(var c=0;c<5;c++){
-    var x = 56+c*92, y = 30+r*56, d = ((r*5+c)*0.7)%4;
+    var i = r*5+c, x = 56+c*92, y = 30+r*56, d = (i*0.7)%4;
     screens += "<g transform='translate("+x+","+y+")'>"+
       "<rect x='0' y='0' width='80' height='46' rx='3' fill='#0c1626' stroke='var(--line)'/>"+
-      "<polyline points='6,38 18,"+(14+((r+c)%3)*8)+" 30,"+(30-((c*3)%12))+" 42,"+(12+((r*c)%14))+" 54,"+(28-((c+r)%10))+" 66,"+(16+((c*2)%10))+" 74,24' "+
-        "fill='none' stroke='"+((r+c)%3===0?"var(--acc)":"var(--acc2)")+"' stroke-width='1.5' opacity='.8' class='art-draw' style='animation-delay:"+d.toFixed(1)+"s'/>"+
-      "<circle cx='73' cy='7' r='2' fill='var(--ok)' class='art-flicker' style='animation-delay:"+((r*3+c)%5)+"s'/>"+
+      vtScreen(i%5, d)+
+      "<circle cx='73' cy='7' r='2' fill='var(--ok)' class='art-flicker' style='animation-delay:"+(i%5)+"s'/>"+
     "</g>";
   }
   return wrap(

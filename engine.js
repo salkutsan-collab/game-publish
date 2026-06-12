@@ -42,6 +42,24 @@ function load(){
     if(s.flags.matrixReds===undefined && (s.defers||[]).some(function(d){ return d.indexOf("красных ячеек матрицы")>=0; })) s.flags.matrixReds = true;
     if(s.flags.gas===undefined && (s.defers||[]).some(function(d){ return d.indexOf("испытания встанут")>=0; })) s.flags.gas = "none";
     if(s.flags.twinDone===undefined && (s.defers||[]).some(function(d){ return d.indexOf("готовый двойник")>=0; })) s.flags.twinDone = "promised";
+    /* сейв стоит на «Итоге среза», а в игре появились НОВЫЕ акты:
+       по логу находим последний реально сыгранный акт и ставим игрока
+       на вход следующего - можно продолжать, не проходя заново */
+    if(s.scene==="sliceEnd"){
+      var maxReal = -1;
+      (s.log||[]).forEach(function(e){
+        if(e.scene && e.scene!=="sliceEnd"){
+          var ai = actIdx(sceneActId(e.scene));
+          if(ai>maxReal) maxReal = ai;
+        }
+      });
+      var lastReal = ACTS.length-2; /* последний сюжетный акт (перед «Итогом») */
+      if(maxReal>=0 && maxReal<lastReal){
+        s.scene = ACTS[maxReal+1].entry;
+        s.ui = {};
+        s.maxActId = ACTS[maxReal+1].id;
+      }
+    }
     return s;
   }catch(e){ return null; }
 }
@@ -727,7 +745,7 @@ function renderEnd(sc){
   var r = S.res;
   var qs = { good:0, weak:0, bad:0 };
   S.log.forEach(function(e){ if(e.type==="choice" && qs[e.q]!=null) qs[e.q]++; });
-  var html = "<div class='task'><b>"+esc(sc.title)+".</b> Спасибо! Дальше игра продолжится актами 3-10 и финалом - они в разработке.</div>";
+  var html = "<div class='task'><b>"+esc(sc.title)+".</b> Спасибо! Главы из списка «Что дальше по сюжету» еще НЕ разработаны - они появятся с обновлениями игры, а ваш прогресс сохранится и продолжится с нового места.</div>";
   html += "<div class='sumrow'>"+
     "<div class='sumcell'>Потрачено недель<b>"+r.weeks+" из "+WEEKS_TOTAL+"</b></div>"+
     "<div class='sumcell'>Остаток бюджета<b>"+r.budget+" млн</b></div>"+
