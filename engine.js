@@ -1026,21 +1026,60 @@ function reviewPanelHtml(rows, links, sel){
 function reviewRows(){
   return DECISIONS.map(function(d){ return { d:d, ev:decisionOf(d.scene), act:sceneActId(d.scene) }; });
 }
+/* карточки разбора по этапам: что сделал / что важно понять / что не получилось */
+function reviewActCards(rows, links){
+  var qcol = { good:"var(--ok)", weak:"var(--warn)", bad:"var(--bad)" };
+  /* исходы натурных испытаний (акт a8) - из лога протокола */
+  var ntFired = [], ntClean = null;
+  S.log.forEach(function(e){
+    if(e.type==="ntest" && e.fired) ntFired.push(e.step);
+    if(e.type==="ntestDone") ntClean = e.clean;
+  });
+  var html = "";
+  ACTS.forEach(function(a){
+    if(a.id==="end" || a.id==="p") return;
+    var ds = []; rows.forEach(function(r,k){ if(r.act===a.id && r.ev) ds.push({ r:r, k:k }); });
+    var isNt = (a.id==="a8" && ntClean!=null);
+    if(!ds.length && !isNt) return;  // этап не сыгран - не показываем
+    /* что сделал */
+    var doneHtml = ds.map(function(d){
+      var col = qcol[d.r.ev.q]||"var(--acc2)";
+      return "<li><span class='revdotmini' style='background:"+col+"'></span>"+esc(d.r.d.t)+": <b>"+esc(stripEmoji(d.r.ev.opt))+"</b></li>";
+    }).join("");
+    if(isNt) doneHtml += "<li><span class='revdotmini' style='background:"+(ntClean?"var(--ok)":"var(--warn)")+"'></span>Протокол натурных испытаний: <b>"+(ntClean?"попадание с первого раза":"пройден с доработками")+"</b></li>";
+    /* что не получилось */
+    var fails = [];
+    ds.forEach(function(d){
+      if(d.r.ev.q==="weak" || d.r.ev.q==="bad"){
+        var refl = d.r.d.refl[d.r.ev.q];
+        fails.push(refl || (d.r.d.t+" - спорное решение"));
+      }
+      (links[d.k]||[]).forEach(function(f){ fails.push("Не исправлено: "+f.text); });
+    });
+    if(isNt && !ntClean) ntFired.forEach(function(si){
+      var st = NTEST.steps[si];
+      if(st) fails.push("На натурных выстрелило: "+st.t.toLowerCase()+".");
+    });
+    html += "<div class='revact'>"+
+      "<div class='revact-t'>"+esc(a.t)+"</div>"+
+      "<div class='revact-row'><span class='revact-lbl'>Сделано</span><ul>"+doneHtml+"</ul></div>"+
+      "<div class='revact-row'><span class='revact-lbl'>Главное на этапе</span><div class='revact-lesson'>"+esc(REVIEW_LESSONS[a.id]||"")+"</div></div>"+
+      "<div class='revact-row'><span class='revact-lbl'>"+(fails.length?"Что не получилось":"Итог")+"</span>"+
+        (fails.length
+          ? "<ul class='revact-fails'>"+fails.map(function(f){ return "<li>"+esc(f)+"</li>"; }).join("")+"</ul>"
+          : "<div class='revact-clean'>Этап пройден чисто - провалов нет.</div>")+
+      "</div></div>";
+  });
+  return html;
+}
 function renderReview(sc){
   var rows = reviewRows(), links = deferLinks();
   var sel = (S.ui.rsel!=null) ? S.ui.rsel : null;
   var html = "<div class='task'>"+sub(sc.task)+"</div>";
   html += "<div style='padding:0 18px'>"+reviewMapSvg(rows, links, sel)+"</div>";
   html += "<div class='revpanel' id='revpanel'>"+reviewPanelHtml(rows, links, sel)+"</div>";
-  html += "<div class='need'>Принцип платформы с ядром SPDM: к любой развилке можно вернуться ТОЧЕЧНО - изменились условия, меняется одно решение и его связи, а не весь проект. Нажмите узел на карте: исправление - кнопкой прямо в панели разбора (дублируется на вкладке «Акты»).</div>";
-  html += "<div class='findings'>"+rows.map(function(r){
-    if(!r.ev) return "";
-    var refl = r.d.refl[r.ev.q] || "";
-    if(!refl) return "";
-    var col = r.ev.q==="good" ? "var(--ok)" : (r.ev.q==="weak" ? "var(--warn)" : "var(--bad)");
-    return "<div class='find' style='border-left-color:"+col+"'><b style='color:"+col+"'>"+esc(r.d.t)+":</b> "+
-      "<span style='color:var(--txt)'>"+esc(stripEmoji(r.ev.opt))+"</span><br>"+esc(refl)+"</div>";
-  }).join("")+"</div>";
+  html += "<div class='need'>Принцип платформы с ядром SPDM: к любой развилке можно вернуться ТОЧЕЧНО - изменились условия, меняется одно решение и его связи, а не весь проект. Нажмите узел на карте: исправление - кнопкой прямо в панели разбора (дублируется на вкладке «Акты»). Ниже - краткий разбор по этапам.</div>";
+  html += "<div class='revacts'>"+reviewActCards(rows, links)+"</div>";
   shell(sc, html, nextBtnHtml("К эпилогу", true));
 }
 

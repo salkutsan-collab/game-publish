@@ -35,10 +35,11 @@ body{
 .devlogos{display:flex; gap:14px; justify-content:center; margin-bottom:20px; flex-wrap:wrap;}
 .devlogo{display:flex; align-items:center; gap:8px; max-width:220px; text-align:left;
   background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:8px 12px;}
-.devlogo img{height:34px; max-width:170px; width:auto; object-fit:contain; opacity:.95;}
+.devlogo img{height:34px; max-width:170px; width:auto; object-fit:contain; opacity:.95;
+  filter:brightness(0) invert(1);} /* логотип белым - иначе не виден на темном фоне */
 .devlogo span{font-size:10px; color:var(--dim); line-height:1.35;}
 .footlogos{display:flex; align-items:center; justify-content:center; gap:16px; margin-top:10px;}
-.footlogos img{height:30px; width:auto; opacity:.85;}
+.footlogos img{height:30px; width:auto; opacity:.85; filter:brightness(0) invert(1);}
 .fl-sep{width:1px; height:22px; background:var(--line);}
 
 /* ---------- одноразовая вводная (ресурсы) ---------- */
@@ -322,6 +323,19 @@ body{
 .revhead{font-size:14px;}
 .revrow{margin-top:7px; font-size:13px; line-height:1.5;}
 .revrow .tag{font-size:10.5px; padding:2px 8px; border-radius:7px;}
+/* карточки разбора по этапам (что сделал / главное / что не получилось) */
+.revacts{display:flex; flex-direction:column; gap:10px; margin:12px 18px 0;}
+.revact{background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:11px 14px;}
+.revact-t{font-size:13px; font-weight:700; color:var(--acc2); margin-bottom:7px;}
+.revact-row{margin-top:6px; font-size:12.5px; line-height:1.5;}
+.revact-lbl{display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--faint); margin-bottom:3px;}
+.revact-row ul{margin:0; padding-left:2px; list-style:none;}
+.revact-row li{margin-top:2px;}
+.revdotmini{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle;}
+.revact-lesson{color:var(--dim);}
+.revact-fails li{color:var(--warn); margin-top:3px; padding-left:14px; position:relative;}
+.revact-fails li::before{content:"✗"; position:absolute; left:0; color:var(--bad);}
+.revact-clean{color:var(--ok); font-size:12px;}
 
 /* ---------- эссе-защита (финал) ---------- */
 .essaywrap{display:grid; grid-template-columns:1fr 240px; gap:12px; padding:4px 18px 0;}
