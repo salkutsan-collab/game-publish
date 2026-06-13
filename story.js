@@ -1462,3 +1462,22 @@ var STORY = {
     coming:[] }
   }
 };
+
+/* ============================================================
+   РЕЕСТР ПРОДУКТОВ.
+   Данные сюжета объявлены выше как глобальные переменные, движок
+   читает их по имени. Чтобы поддержать несколько изделий, мы
+   складываем весь набор данных одного изделия в window.GAMEDATA[id].
+   На входе игрок выбирает изделие -> движок «привязывает» нужный
+   набор к этим именам (bindProduct в engine.js). Базовое изделие -
+   авиадвигатель (ГТД); другие изделия (см. story_*.js) могут
+   переопределять часть наборов, остальное наследуют от ГТД.
+   ============================================================ */
+window.GAMEDATA = window.GAMEDATA || {};
+window.GAMEDATA.gtd = {
+  CHARS:CHARS, TECH0:TECH0, ARTS:ARTS, GLOSS:GLOSS, MATRIX:MATRIX, A2FILL:A2FILL,
+  A1CASES:A1CASES, A3TREE:A3TREE, A4DIAG:A4DIAG, A6CAMP:A6CAMP, A7TREE:A7TREE,
+  ESSAY:ESSAY, FINTREE:FINTREE, TREES:TREES, REDO:REDO, REVIEW_LESSONS:REVIEW_LESSONS,
+  DECISIONS:DECISIONS, NTEST:NTEST, SENS:SENS, A5VALID:A5VALID, ACTS:ACTS, STORY:STORY,
+  izdLabel:"авиадвигатель (ГТД)", izdShort:"ГТД"
+};

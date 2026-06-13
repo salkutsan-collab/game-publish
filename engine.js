@@ -9,6 +9,24 @@ var SAVE_KEY = "pd_save_v1";
 var WEEKS_TOTAL = 52;
 var S = null;          // состояние игры
 var prevRes = null;    // прошлые значения ресурсов (для стрелок-дельт)
+var IZD = "gtd";       // активное изделие (выбирается на входе)
+
+/* ---------- продукты ----------
+   Данные сюжета лежат в window.GAMEDATA[izd] (см. story.js / story_*.js).
+   bindProduct «привязывает» выбранное изделие к глобальным именам,
+   которые читает движок (STORY, ACTS, GLOSS, MATRIX, ...). Вызывается
+   ДО первого чтения STORY (в start и в init/cont перед render). */
+var PRODUCT_KEYS = ["CHARS","TECH0","ARTS","GLOSS","MATRIX","A2FILL","A1CASES",
+  "A3TREE","A4DIAG","A6CAMP","A7TREE","ESSAY","FINTREE","TREES","REDO",
+  "REVIEW_LESSONS","DECISIONS","NTEST","SENS","A5VALID","ACTS","STORY"];
+function bindProduct(izd){
+  var reg = window.GAMEDATA || {};
+  var d = reg[izd] || reg.gtd;
+  if(!d) return;
+  IZD = reg[izd] ? izd : "gtd";
+  PRODUCT_KEYS.forEach(function(k){ if(d[k]!==undefined) window[k]=d[k]; });
+}
+function izdLabel(){ var d=(window.GAMEDATA||{})[IZD]; return (d&&d.izdLabel)||"авиадвигатель (ГТД)"; }
 
 /* Авто-отправка отчета преподавателю - БЕЗ действий игрока: на финале
    и при закрытии страницы. Та же гугл-форма, что у тренажера «Фабрика
@@ -35,6 +53,7 @@ function makeReport(reason){
   var pr = projRank();
   return {
     игра:"Путь двойника", версия:"полный сюжет (пролог + 11 актов + финал)",
+    изделие:izdLabel(),
     причина:reason||"",
     слушатель:S.name, начало:new Date(S.started).toISOString(),
     достигнут_акт:(ACTS[Math.max(0, actIdx(S.maxActId||"p"))]||{}).t || "Пролог",
@@ -55,7 +74,7 @@ function sendReport(reason, useBeacon){
     if(gf && gf.url){
       var prm = new URLSearchParams();
       prm.append(gf.fields.player, S.name||"");
-      prm.append(gf.fields.izdelie, "игра «Путь двойника» · авиадвигатель (ГТД)");
+      prm.append(gf.fields.izdelie, "игра «Путь двойника» · "+izdLabel());
       prm.append(gf.fields.stationsDone, rep.достигнут_акт);
       prm.append(gf.fields.readiness, rep.итог.балл+"/100 · "+rep.итог.звание);
       prm.append(gf.fields.report, JSON.stringify(rep));
@@ -76,7 +95,7 @@ function sendReport(reason, useBeacon){
 /* ---------- состояние ---------- */
 function freshState(name){
   return {
-    v:1, name:name, scene:STORY.start,
+    v:1, name:name, izd:IZD, scene:STORY.start,
     res:{ weeks:0, budget:300, cores:0, trust:50, adeq:0 },
     flags:{}, arts:[], gloss:[], defers:[],
     tech: TECH0.map(function(t){ return { id:t.id, st:t.st }; }),
@@ -187,7 +206,7 @@ function qualFx(q){ return q==="good" ? {trust:2} : (q==="weak" ? {trust:0} : {t
 
 /* ---------- верхняя панель ---------- */
 function renderTop(sc){
-  el("actlabel").innerHTML = esc(sc.act||"") + "<br>Изделие: авиадвигатель (ГТД)";
+  el("actlabel").innerHTML = esc(sc.act||"") + "<br>Изделие: " + esc(izdLabel());
   var r = S.res, p = prevRes || r;
   function d(key, inverted){
     var diff = r[key]-p[key]; if(!diff) return "";
@@ -1335,19 +1354,33 @@ window.addEventListener("beforeunload", sendOnExit);
 /* ---------- публичный интерфейс ---------- */
 return {
   init: function(){
+    /* сохраненная игра может быть по другому изделию - привязываем
+       его ДО load(), который уже читает STORY выбранного продукта */
+    var pre=null; try{ var raw=localStorage.getItem(SAVE_KEY); if(raw) pre=JSON.parse(raw); }catch(e){}
+    bindProduct(pre && pre.izd ? pre.izd : "gtd");
     var saved = load();
     if(saved){
       S = saved;
       el("login-new").classList.add("hidden");
       el("login-cont").classList.remove("hidden");
-      el("contbtn").textContent = "Продолжить · "+S.name;
+      el("contbtn").textContent = "Продолжить · "+S.name+" · "+izdLabel();
+    } else {
+      bindProduct("gtd");   // для нового проекта - изделие по умолчанию
     }
     el("login").classList.remove("hidden");
   },
+  pickIzd: function(elOpt){
+    document.querySelectorAll(".izdopt").forEach(function(o){ o.classList.remove("on"); });
+    elOpt.classList.add("on");
+    bindProduct(elOpt.getAttribute("data-izd") || "gtd");
+    var lab = el("login-izd"); if(lab) lab.innerHTML = "Изделие: <b>"+esc(izdLabel())+"</b> · полный сюжет: пролог + 11 актов + финал";
+  },
   start: function(){
     var name = el("pname").value.trim() || "Инженер";
+    var pick = document.querySelector(".izdopt.on");
+    bindProduct(pick ? (pick.getAttribute("data-izd")||"gtd") : IZD);
     S = freshState(name);
-    logEv("start",{name:name});
+    logEv("start",{name:name, izd:IZD});
     save();
     el("login").classList.add("hidden");
     el("game").classList.remove("hidden");
@@ -1355,6 +1388,7 @@ return {
     showResIntro();   // одноразовая вводная только для новой игры
   },
   cont: function(){
+    bindProduct(S && S.izd ? S.izd : "gtd");
     el("login").classList.add("hidden");
     el("game").classList.remove("hidden");
     prevRes = null;
