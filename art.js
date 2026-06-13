@@ -71,6 +71,38 @@ function wrap(inner){
   return "<svg class='artsvg' viewBox='0 0 800 170' preserveAspectRatio='xMidYMid slice' xmlns='http://www.w3.org/2000/svg' aria-hidden='true'>"+inner+"</svg>";
 }
 
+/* ---------- мотив изделия (продукто-зависимый) ----------
+   gtd рисуется прежним кодом в каждой локации; для uav подставляется
+   «Снегирь»: летающее крыло с 4 моторами (2 носовых убираемых, 2 хвостовых
+   поворотных). Флаг изделия выставляет engine.bindProduct -> window.GAME_IZD. */
+function IZ(){ return window.GAME_IZD || 'gtd'; }
+function isUav(){ return IZ()==='uav'; }
+/* воздушный винт - вращающийся */
+function prop(x,y,delay,wire){
+  var col = wire ? "none" : "var(--acc2)";
+  var st  = wire ? " stroke='var(--acc2)' stroke-width='1' stroke-dasharray='3 3'" : "";
+  return "<g transform='translate("+x+","+y+")'><g class='art-rotate' style='animation-delay:"+(delay||0)+"s'>"+
+    "<rect x='-1' y='-7' width='2' height='14' rx='1' fill='"+col+"'"+st+" opacity='.85'/>"+
+    "<rect x='-7' y='-1' width='14' height='2' rx='1' fill='"+col+"'"+st+" opacity='.85'/></g>"+
+    "<circle r='2.1' fill='"+(wire?"none":"var(--acc)")+"'"+(wire?" stroke='var(--acc)'":"")+"/></g>";
+}
+/* летающее крыло «Снегирь» (вид сверху), нос вверх, 4 мотора. cx,cy - центр; sc - масштаб */
+function craft(cx,cy,sc,wire){
+  sc = sc||1;
+  var fill = wire ? "none" : "#101d31";
+  var dash = wire ? " stroke-dasharray='5 4'" : "";
+  return "<g transform='translate("+cx+","+cy+") scale("+sc+")'>"+
+    "<path d='M 0 -26 Q 34 -17 80 8 Q 58 12 40 11 Q 14 10 0 14 Q -14 10 -40 11 Q -58 12 -80 8 Q -34 -17 0 -26 Z' fill='"+fill+"' stroke='var(--acc2)' stroke-opacity='.6'"+dash+"/>"+
+    "<ellipse cx='0' cy='-4' rx='9' ry='12' fill='"+(wire?"none":"#16263e")+"' stroke='var(--acc2)' stroke-opacity='.5'"+dash+"/>"+
+    prop(-21,-7,0,wire) + prop(21,-7,.5,wire) +        /* носовые (убираемые в корпус) */
+    prop(-58,7,.8,wire) + prop(58,7,1.1,wire) +        /* хвостовые поворотные */
+  "</g>";
+}
+/* секция крыла (профиль) для испытаний на флаттер/аэроупругость */
+function wingSec(){
+  return "<path d='M -34 0 Q -10 -10 20 -6 Q 34 -4.5 34 -1.5 Q 34 1.5 20 3 Q -10 5 -34 0 Z' fill='var(--acc2)' opacity='.82'/>";
+}
+
 /* ---------- локации ---------- */
 
 /* Кабинет директора: стол переговоров, экран со слайдами, окно-город */
@@ -124,14 +156,16 @@ function hall(){
   /* большой экран: контур двигателя + вращающийся вентилятор + бегущий поток */
   var big = "<g transform='translate(540,30)'>"+
     "<rect x='0' y='0' width='220' height='104' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
-    "<g transform='translate(58,52)'>"+
-      "<g class='art-rotate'>"+
-        (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.8' y='-30' width='3.6' height='26' rx='1.8' fill='var(--acc2)' opacity='.8' transform='rotate("+(k*45)+")'/>"; } return b; })() +
-      "<circle cx='0' cy='0' r='6' fill='var(--acc)'/></g>"+
-      "<circle cx='0' cy='0' r='33' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.6'/>"+
-    "</g>"+
+    (isUav()
+      ? craft(58,60,1.02,false)
+      : "<g transform='translate(58,52)'>"+
+        "<g class='art-rotate'>"+
+          (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.8' y='-30' width='3.6' height='26' rx='1.8' fill='var(--acc2)' opacity='.8' transform='rotate("+(k*45)+")'/>"; } return b; })() +
+        "<circle cx='0' cy='0' r='6' fill='var(--acc)'/></g>"+
+        "<circle cx='0' cy='0' r='33' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.6'/>"+
+      "</g>") +
     "<path d='M 100 30 H 196 M 100 52 H 196 M 100 74 H 196' stroke='var(--acc2)' stroke-width='1.6' opacity='.55' stroke-dasharray='7 9' class='art-flow'/>"+
-    "<text x='104' y='22' font-size='10' fill='var(--dim)' font-family='Segoe UI'>поток · режим взлет</text>"+
+    "<text x='104' y='22' font-size='10' fill='var(--dim)' font-family='Segoe UI'>"+(isUav()?"обдув крыла · крейсер":"поток · режим взлет")+"</text>"+
   "</g>";
   /* серверная стойка */
   var rack = "<g transform='translate(20,58)'><rect x='0' y='0' width='34' height='92' rx='3' fill='#0e1a2c' stroke='var(--line)'/>"+
@@ -224,12 +258,14 @@ function desk(){
     /* правый экран: турбина */
     "<g transform='translate(490,38)'>"+
       "<rect x='0' y='0' width='150' height='92' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
-      "<g transform='translate(75,46)'>"+
-        "<g class='art-rotate-slow'>"+
-          (function(){ var b=""; for(var k=0;k<6;k++){ b+="<path d='M 0 -8 Q 10 -18 4 -30 L -2 -28 Q -4 -16 0 -8 Z' fill='var(--acc2)' opacity='.75' transform='rotate("+(k*60)+")'/>"; } return b; })() +
-        "<circle cx='0' cy='0' r='5' fill='var(--acc)'/></g>"+
-        "<circle cx='0' cy='0' r='34' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.5'/>"+
-      "</g>"+
+      (isUav()
+        ? craft(75,52,0.62,false)
+        : "<g transform='translate(75,46)'>"+
+          "<g class='art-rotate-slow'>"+
+            (function(){ var b=""; for(var k=0;k<6;k++){ b+="<path d='M 0 -8 Q 10 -18 4 -30 L -2 -28 Q -4 -16 0 -8 Z' fill='var(--acc2)' opacity='.75' transform='rotate("+(k*60)+")'/>"; } return b; })() +
+          "<circle cx='0' cy='0' r='5' fill='var(--acc)'/></g>"+
+          "<circle cx='0' cy='0' r='34' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.5'/>"+
+        "</g>") +
     "</g>"+
     sit(330, 152, 1.05, true) +
     "<rect x='240' y='140' width='190' height='6' rx='3' fill='#152238'/>"+ /* столешница */
@@ -243,15 +279,17 @@ function fab(){
     "<rect x='0' y='0' width='800' height='14' fill='#0e1a2c'/>"+
     "<rect x='330' y='14' width='8' height='30' fill='#0e1a2c'/><rect x='300' y='40' width='68' height='8' rx='3' fill='#152238'/>"+
     "<line x1='322' y1='48' x2='322' y2='66' stroke='var(--line)' stroke-width='2'/><line x1='346' y1='48' x2='346' y2='66' stroke='var(--line)' stroke-width='2'/>"+
-    /* двигатель: гондола + вентилятор */
-    "<g transform='translate(334,100)' class='art-pulse'>"+
-      "<ellipse cx='0' cy='0' rx='66' ry='34' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
-      "<g transform='translate(-38,0)'><g class='art-rotate'>"+
-        (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.4' y='-24' width='2.8' height='21' rx='1.4' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*45)+")'/>"; } return b; })() +
-      "<circle cx='0' cy='0' r='5' fill='var(--acc)'/></g>"+
-      "<circle cx='0' cy='0' r='26' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.7'/></g>"+
-      "<path d='M 30 -12 H 60 M 30 0 H 64 M 30 12 H 60' stroke='var(--acc)' stroke-width='2' stroke-dasharray='6 8' class='art-flow' opacity='.7'/>"+
-    "</g>"+
+    /* изделие на стенде */
+    (isUav()
+      ? "<g transform='translate(334,104)' class='art-pulse'>"+craft(0,0,0.98,false)+"</g>"
+      : "<g transform='translate(334,100)' class='art-pulse'>"+
+        "<ellipse cx='0' cy='0' rx='66' ry='34' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+        "<g transform='translate(-38,0)'><g class='art-rotate'>"+
+          (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.4' y='-24' width='2.8' height='21' rx='1.4' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*45)+")'/>"; } return b; })() +
+        "<circle cx='0' cy='0' r='5' fill='var(--acc)'/></g>"+
+        "<circle cx='0' cy='0' r='26' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.7'/></g>"+
+        "<path d='M 30 -12 H 60 M 30 0 H 64 M 30 12 H 60' stroke='var(--acc)' stroke-width='2' stroke-dasharray='6 8' class='art-flow' opacity='.7'/>"+
+      "</g>") +
     /* стойки стенда */
     "<rect x='292' y='128' width='10' height='28' fill='#101b2d'/><rect x='366' y='128' width='10' height='28' fill='#101b2d'/>"+
     /* экран готовности */
@@ -305,14 +343,16 @@ function lab(){
       "<rect x='8' y='30' width='114' height='14' rx='3' fill='#152238' stroke='var(--line)'/>"+ /* корпус вибратора */
       "<g class='art-shake'>"+
         "<rect x='28' y='18' width='74' height='12' rx='2' fill='#1b2a44' stroke='var(--acc2)' stroke-opacity='.5'/>"+ /* стол */
-        "<path d='M 60 18 L 56 -18 Q 65 -26 74 -18 L 70 18 Z' fill='var(--acc2)' opacity='.85'/>"+ /* лопатка */
+        (isUav()
+          ? "<g transform='translate(65,6)'>"+wingSec()+"</g>"   /* секция крыла */
+          : "<path d='M 60 18 L 56 -18 Q 65 -26 74 -18 L 70 18 Z' fill='var(--acc2)' opacity='.85'/>") + /* лопатка */
       "</g>"+
       "<circle cx='18' cy='37' r='3' fill='var(--ok)' class='art-flicker'/>"+
     "</g>"+
     /* осциллограф: бегущая волна */
     "<g transform='translate(420,40)'>"+
       "<rect x='0' y='0' width='190' height='92' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
-      "<text x='12' y='15' font-size='9.5' fill='var(--dim)' font-family='Segoe UI'>ОТКЛИК · АЧХ лопатки</text>"+
+      "<text x='12' y='15' font-size='9.5' fill='var(--dim)' font-family='Segoe UI'>"+(isUav()?"ОТКЛИК · АЧХ крыла":"ОТКЛИК · АЧХ лопатки")+"</text>"+
       "<path d='M 10 58 Q 22 30 34 58 Q 46 86 58 58 Q 70 26 82 58 Q 94 90 106 58 Q 118 34 130 58 Q 142 82 154 58 Q 166 38 178 58' fill='none' stroke='var(--ok)' stroke-width='1.8' stroke-dasharray='6 4' class='art-wave'/>"+
       "<line x1='10' y1='58' x2='180' y2='58' stroke='var(--line)' stroke-dasharray='2 4'/>"+
     "</g>"+
@@ -328,24 +368,37 @@ function lab(){
    траектория, вибростенд), счетчик выполненных испытаний */
 function vtScreen(type, d){
   /* содержимое одного экрана 80x46, локальные координаты */
-  if(type===0){ /* вентилятор: виртуальный стенд обдува */
-    return "<g transform='translate(26,23)'><g class='art-rotate-slow' style='animation-delay:"+d+"s'>"+
-      (function(){ var b=""; for(var k=0;k<6;k++){ b+="<rect x='-1.1' y='-13' width='2.2' height='11' rx='1.1' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*60)+")'/>"; } return b; })()+
-      "<circle cx='0' cy='0' r='3' fill='var(--acc)'/></g>"+
-      "<circle cx='0' cy='0' r='15' fill='none' stroke='var(--acc2)' stroke-width='1' opacity='.5'/></g>"+
+  if(type===0){ /* обдув: вентилятор (gtd) / летающее крыло (uav) */
+    var head0 = isUav()
+      ? craft(28,24,0.30,false)
+      : "<g transform='translate(26,23)'><g class='art-rotate-slow' style='animation-delay:"+d+"s'>"+
+        (function(){ var b=""; for(var k=0;k<6;k++){ b+="<rect x='-1.1' y='-13' width='2.2' height='11' rx='1.1' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*60)+")'/>"; } return b; })()+
+        "<circle cx='0' cy='0' r='3' fill='var(--acc)'/></g>"+
+        "<circle cx='0' cy='0' r='15' fill='none' stroke='var(--acc2)' stroke-width='1' opacity='.5'/></g>";
+    return head0 +
       "<path d='M 48 12 H 72 M 48 23 H 74 M 48 34 H 72' stroke='var(--acc2)' stroke-width='1.3' opacity='.6' stroke-dasharray='4 5' class='art-flow'/>";
   }
-  if(type===1){ /* лопатка: зоны нагрузки пульсируют */
-    return "<g transform='translate(28,42)'>"+
-      "<path d='M -6 0 L -4 -30 Q 2 -36 8 -30 L 6 0 Z' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+
-      "<ellipse cx='1' cy='-26' rx='4' ry='5' fill='var(--bad)' opacity='.55' class='art-glow' style='animation-delay:"+d+"s'/>"+
-      "<ellipse cx='0' cy='-12' rx='4.5' ry='6' fill='var(--warn)' opacity='.45' class='art-glow' style='animation-delay:"+(d+1)+"s'/>"+
-      "<rect x='-8' y='0' width='18' height='4' rx='1.5' fill='#101b2d'/></g>"+
+  if(type===1){ /* зоны нагрузки: лопатка (gtd) / секция крыла (uav) */
+    return (isUav()
+      ? "<g transform='translate(8,24)'>"+
+        "<path d='M 0 0 Q 14 -7 40 -4 Q 50 -3 50 -1 Q 50 1 40 2 Q 14 4 0 0 Z' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+        "<ellipse cx='11' cy='-2' rx='4' ry='3.4' fill='var(--bad)' opacity='.55' class='art-glow' style='animation-delay:"+d+"s'/>"+
+        "<ellipse cx='30' cy='-1' rx='4.5' ry='3.6' fill='var(--warn)' opacity='.45' class='art-glow' style='animation-delay:"+(d+1)+"s'/></g>"
+      : "<g transform='translate(28,42)'>"+
+        "<path d='M -6 0 L -4 -30 Q 2 -36 8 -30 L 6 0 Z' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+        "<ellipse cx='1' cy='-26' rx='4' ry='5' fill='var(--bad)' opacity='.55' class='art-glow' style='animation-delay:"+d+"s'/>"+
+        "<ellipse cx='0' cy='-12' rx='4.5' ry='6' fill='var(--warn)' opacity='.45' class='art-glow' style='animation-delay:"+(d+1)+"s'/>"+
+        "<rect x='-8' y='0' width='18' height='4' rx='1.5' fill='#101b2d'/></g>") +
       "<text x='46' y='16' font-size='7.5' fill='var(--dim)' font-family='Segoe UI'>зоны</text>"+
       "<text x='46' y='26' font-size='7.5' fill='var(--dim)' font-family='Segoe UI'>нагрузки</text>"+
       "<rect x='46' y='32' width='8' height='5' fill='var(--bad)' opacity='.6'/><rect x='56' y='32' width='8' height='5' fill='var(--warn)' opacity='.5'/><rect x='66' y='32' width='8' height='5' fill='var(--ok)' opacity='.5'/>";
   }
-  if(type===2){ /* двигатель в разрезе: поток бежит сквозь */
+  if(type===2){ /* поток: разрез двигателя (gtd) / обтекание крыла (uav) */
+    if(isUav()){
+      return craft(40,24,0.34,false) +
+        "<path d='M 4 10 H 16 M 4 20 H 14 M 4 30 H 16' stroke='var(--acc2)' stroke-width='1.2' opacity='.7' stroke-dasharray='3 4' class='art-flow'/>"+
+        "<path d='M 64 10 H 76 M 66 20 H 76 M 64 30 H 76' stroke='var(--acc)' stroke-width='1.3' opacity='.8' stroke-dasharray='4 4' class='art-flow' style='animation-delay:"+(d*0.4)+"s'/>";
+    }
     return "<g transform='translate(40,23)'>"+
       "<ellipse cx='0' cy='0' rx='26' ry='13' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
       "<ellipse cx='-16' cy='0' rx='4' ry='9' fill='none' stroke='var(--acc2)' stroke-width='1' opacity='.7'/>"+
@@ -398,14 +451,16 @@ function assembly(){
     "<rect x='0' y='0' width='800' height='12' fill='#0e1a2c'/>"+
     "<rect x='150' y='12' width='8' height='22' fill='#0e1a2c'/><rect x='118' y='30' width='72' height='8' rx='3' fill='#152238'/>"+
     "<line x1='138' y1='38' x2='138' y2='58' stroke='var(--line)' stroke-width='2'/><line x1='170' y1='38' x2='170' y2='58' stroke='var(--line)' stroke-width='2'/>"+
-    /* двигатель на сборочной тележке */
-    "<g transform='translate(154,104)'>"+
-      "<ellipse cx='0' cy='0' rx='58' ry='30' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.45'/>"+
-      "<g transform='translate(-34,0)'><g class='art-rotate-slow'>"+
-        (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.2' y='-20' width='2.4' height='17' rx='1.2' fill='var(--acc2)' opacity='.8' transform='rotate("+(k*45)+")'/>"; } return b; })() +
-      "<circle cx='0' cy='0' r='4' fill='var(--acc)'/></g>"+
-      "<circle cx='0' cy='0' r='22' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.6'/></g>"+
-    "</g>"+
+    /* изделие на сборочной тележке */
+    (isUav()
+      ? "<g transform='translate(154,104)'>"+craft(0,0,0.82,false)+"</g>"
+      : "<g transform='translate(154,104)'>"+
+        "<ellipse cx='0' cy='0' rx='58' ry='30' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.45'/>"+
+        "<g transform='translate(-34,0)'><g class='art-rotate-slow'>"+
+          (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.2' y='-20' width='2.4' height='17' rx='1.2' fill='var(--acc2)' opacity='.8' transform='rotate("+(k*45)+")'/>"; } return b; })() +
+        "<circle cx='0' cy='0' r='4' fill='var(--acc)'/></g>"+
+        "<circle cx='0' cy='0' r='22' fill='none' stroke='var(--acc2)' stroke-width='1.2' opacity='.6'/></g>"+
+      "</g>") +
     "<rect x='104' y='132' width='100' height='6' rx='3' fill='#152238'/><circle cx='118' cy='146' r='6' fill='#101b2d'/><circle cx='190' cy='146' r='6' fill='#101b2d'/>"+
     /* стеллажи с деталями */
     "<g transform='translate(330,52)'><rect x='0' y='0' width='120' height='100' rx='3' fill='#0e1a2c' stroke='var(--line)'/>"+
@@ -430,16 +485,18 @@ function testcell(){
     "<rect x='0' y='0' width='800' height='10' fill='#0e1a2c'/>"+
     /* предупреждающие маяки */
     "<circle cx='40' cy='26' r='5' fill='var(--bad)' class='art-flicker'/><circle cx='760' cy='26' r='5' fill='var(--bad)' class='art-flicker' style='animation-delay:1.2s'/>"+
-    /* двигатель на станине, слегка дрожит */
-    "<g class='art-shake'><g transform='translate(330,92)'>"+
-      "<ellipse cx='0' cy='0' rx='80' ry='38' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
-      "<g transform='translate(-46,0)'><g class='art-rotate'>"+
-        (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.6' y='-28' width='3.2' height='24' rx='1.6' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*45)+")'/>"; } return b; })() +
-      "<circle cx='0' cy='0' r='6' fill='var(--acc)'/></g>"+
-      "<circle cx='0' cy='0' r='30' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.7'/></g>"+
-      /* выхлоп */
-      "<path d='M 82 -10 q 30 10 58 0 M 82 0 q 34 6 64 0 M 82 10 q 30 -8 58 0' stroke='var(--acc)' stroke-width='2.4' fill='none' opacity='.75' stroke-dasharray='8 6' class='art-flow'/>"+
-    "</g></g>"+
+    /* изделие на станине, слегка дрожит */
+    (isUav()
+      ? "<g class='art-shake'>"+craft(330,98,1.08,false)+"</g>"
+      : "<g class='art-shake'><g transform='translate(330,92)'>"+
+        "<ellipse cx='0' cy='0' rx='80' ry='38' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+        "<g transform='translate(-46,0)'><g class='art-rotate'>"+
+          (function(){ var b=""; for(var k=0;k<8;k++){ b+="<rect x='-1.6' y='-28' width='3.2' height='24' rx='1.6' fill='var(--acc2)' opacity='.85' transform='rotate("+(k*45)+")'/>"; } return b; })() +
+        "<circle cx='0' cy='0' r='6' fill='var(--acc)'/></g>"+
+        "<circle cx='0' cy='0' r='30' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='.7'/></g>"+
+        /* выхлоп */
+        "<path d='M 82 -10 q 30 10 58 0 M 82 0 q 34 6 64 0 M 82 10 q 30 -8 58 0' stroke='var(--acc)' stroke-width='2.4' fill='none' opacity='.75' stroke-dasharray='8 6' class='art-flow'/>"+
+      "</g></g>") +
     /* станина */
     "<rect x='258' y='128' width='12' height='28' fill='#101b2d'/><rect x='390' y='128' width='12' height='28' fill='#101b2d'/>"+
     "<rect x='240' y='124' width='180' height='8' rx='3' fill='#152238'/>"+
@@ -449,8 +506,8 @@ function testcell(){
       "<rect x='12' y='14' width='76' height='44' rx='3' fill='#0c1626' stroke='var(--line)'/>"+
       "<polyline points='18,46 30,28 42,40 54,22 66,36 80,26' fill='none' stroke='var(--ok)' stroke-width='1.6' class='art-draw'/>"+
       "<rect x='100' y='14' width='76' height='44' rx='3' fill='#0c1626' stroke='var(--line)'/>"+
-      "<text x='110' y='32' font-size='9' fill='var(--dim)' font-family='Segoe UI'>тяга, кН</text>"+
-      "<text x='110' y='50' font-size='15' fill='var(--acc2)' font-weight='700' font-family='Segoe UI' class='art-glow'>84.6</text>"+
+      "<text x='110' y='32' font-size='9' fill='var(--dim)' font-family='Segoe UI'>"+(isUav()?"скорость, км/ч":"тяга, кН")+"</text>"+
+      "<text x='110' y='50' font-size='15' fill='var(--acc2)' font-weight='700' font-family='Segoe UI' class='art-glow'>"+(isUav()?"172":"84.6")+"</text>"+
       (function(){ var s=""; var ppl=[[30,96],[90,96],[150,96]]; for(var k=0;k<3;k++){ s+="<g transform='translate("+ppl[k][0]+","+ppl[k][1]+") scale(0.78)'><circle cx='0' cy='-26' r='7.5' fill='#0a111d'/><path d='M -11 6 Q -11 -16 0 -16 Q 11 -16 11 6 Z' fill='#0a111d'/></g>"; } return s; })() +
     "</g>"+
     lamp(180, 54, false) +
@@ -504,8 +561,8 @@ function twinmirror(){
   }
   return wrap(
     lamp(180, 54, false) + lamp(600, 54, false) +
-    /* реальный двигатель + техники */
-    engineShape(170, 96, false) +
+    /* реальное изделие + техники */
+    (isUav() ? craft(170, 98, 1.0, false) : engineShape(170, 96, false)) +
     "<rect x='100' y='126' width='10' height='30' fill='#101b2d'/><rect x='230' y='126' width='10' height='30' fill='#101b2d'/>"+
     stand(70, 152, 1.0, true) + arm(78, 116) + stand(282, 152, 1.0, false) +
     "<rect x='292' y='112' width='14' height='18' rx='2' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+ /* планшет техника */
@@ -513,7 +570,7 @@ function twinmirror(){
     /* экран с двойником */
     "<g transform='translate(470,30)'><rect x='0' y='0' width='290' height='118' rx='6' fill='#0c1626' stroke='var(--acc2)' stroke-opacity='.45'/>"+
     "<text x='14' y='18' font-size='10' fill='var(--dim)' font-family='Segoe UI'>ЦИФРОВОЙ ДВОЙНИК · экземпляр 89512</text></g>"+
-    engineShape(615, 92, true) +
+    (isUav() ? craft(615, 94, 1.0, true) : engineShape(615, 92, true)) +
     "<text x='615' y='138' font-size='10' fill='var(--acc2)' text-anchor='middle' font-family='Segoe UI'>модель следует за железом</text>"+
     /* двусторонние связи: данные вправо, рекомендации влево */
     "<path d='M 250 78 H 455' stroke='var(--acc2)' stroke-width='2' stroke-dasharray='7 7' class='art-flow'/>"+

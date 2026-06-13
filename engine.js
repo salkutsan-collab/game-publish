@@ -24,6 +24,7 @@ function bindProduct(izd){
   var d = reg[izd] || reg.gtd;
   if(!d) return;
   IZD = reg[izd] ? izd : "gtd";
+  window.GAME_IZD = IZD;   // арт (art.js) рисует мотив изделия по этому флагу
   PRODUCT_KEYS.forEach(function(k){ if(d[k]!==undefined) window[k]=d[k]; });
 }
 function izdLabel(){ var d=(window.GAMEDATA||{})[IZD]; return (d&&d.izdLabel)||"авиадвигатель (ГТД)"; }
