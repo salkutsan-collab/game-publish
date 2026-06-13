@@ -204,6 +204,18 @@ function say(who, text){
     "<div class='who'>"+esc(who==="player"?S.name:c.name)+" · "+esc(c.role)+"</div>"+sub(text)+"</div></div>";
 }
 function qualFx(q){ return q==="good" ? {trust:2} : (q==="weak" ? {trust:0} : {trust:-3}); }
+/* ПРАВИЛО: правильный вариант не должен всегда стоять первым. permFor дает
+   детерминированную перестановку индексов [0..n-1] по ключу + номеру игры:
+   порядок «перемешан», но стабилен в пределах партии (между пере-рендерами
+   сцены и перезагрузками), а логика работает по РЕАЛЬНОМУ индексу варианта. */
+function permFor(key, n){
+  var s = ((S && S.started) ? S.started : 1) >>> 0;
+  var str = ""+key;
+  for(var c=0;c<str.length;c++){ s = (Math.imul(s,31) + str.charCodeAt(c)) >>> 0; }
+  var idx=[]; for(var i=0;i<n;i++) idx.push(i);
+  for(var i=n-1;i>0;i--){ s = (Math.imul(s,1103515245)+12345) >>> 0; var j=s%(i+1); var t=idx[i]; idx[i]=idx[j]; idx[j]=t; }
+  return idx;
+}
 
 /* ---------- верхняя панель ---------- */
 function renderTop(sc){
@@ -313,7 +325,7 @@ function renderChoice(sc){
   html += "<div class='task'>"+sub(sc.task)+"</div>";
   if(sc.need) html += "<div class='need'>"+sc.need+"</div>";
   html += "<div class='step-title'>"+(sc.noJust?"Решение":"Шаг 1 из 2 · <span>Выбор решения</span>")+"</div>";
-  html += "<div class='choices'>" + sc.options.map(function(o,i){
+  html += "<div class='choices'>" + permFor(S.scene+"#opt", sc.options.length).map(function(i){ var o=sc.options[i];
     return "<div class='card' id='opt"+i+"' onclick='G.pick("+i+")'><h4>"+esc(o.t)+"</h4>"+esc(o.desc)+
       (o.cost?"<div class='cost'><i class='minus'>"+esc(o.cost)+"</i></div>":"")+"</div>";
   }).join("") + "</div>";
@@ -341,7 +353,7 @@ function pick(i){
     el("nextbtn").classList.remove("ready");  // ждём обоснование
     j.className = "justify open";
     j.innerHTML = "<div class='step-title' style='padding-left:0'>Шаг 2 из 2 · <span>Обоснование - почему так?</span></div>"+
-      o.just.map(function(jo,k){
+      permFor(S.scene+"#just"+pickState.opt, o.just.length).map(function(k){ var jo=o.just[k];
         return "<div class='jopt' id='jopt"+k+"' onclick='G.just("+k+")'><span class='dot'></span>"+esc(jo.t)+"</div>";
       }).join("");
   }
@@ -561,16 +573,28 @@ function confirmCases(sc){
 
 /* ---------- tree: интерактивная сборка по узлам (акты 3 и 7) ---------- */
 function treeCfg(sc){ return TREES[sc.tree || "a3"]; }
+function treeNodeById(cfg,id){ var r=null; cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(nd.id===id) r=nd; }); }); return r; }
+/* ПРАВИЛО: в множественном выборе «взять всё» не должно быть верным.
+   Узлы с trap:true - ложные (их подключать НЕ надо). Завершение возможно,
+   только когда подключены все настоящие узлы И не выбрано ни одного ложного. */
+function treeStats(cfg){
+  var done = S.ui.tdone || [];
+  var realTotal=0, realDone=0, trapSel=[];
+  cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){
+    if(nd.trap){ if(done.indexOf(nd.id)>=0) trapSel.push(nd); }
+    else { realTotal++; if(done.indexOf(nd.id)>=0) realDone++; }
+  }); });
+  return { realTotal:realTotal, realDone:realDone, trapSel:trapSel, allDone:(realDone===realTotal && trapSel.length===0) };
+}
 function treeCount(cfg){
   var done = S.ui.tdone || [];
   var n = cfg.start;
-  cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(done.indexOf(nd.id)>=0) n += nd.n; }); });
+  cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(!nd.trap && done.indexOf(nd.id)>=0) n += nd.n; }); });
   return n;
 }
 function renderTree(sc){
   var cfg = treeCfg(sc);
   var done = S.ui.tdone || [];
-  var total = 0; cfg.levels.forEach(function(lv){ total += lv.nodes.length; });
   var html = "<div class='task'>"+sub(sc.task)+"</div><div class='tree'>";
   cfg.levels.forEach(function(lv, li){
     html += "<div class='tlevel'><h5>"+esc(lv.t)+"</h5><div class='tnodes'>";
@@ -578,33 +602,40 @@ function renderTree(sc){
       var on = done.indexOf(nd.id)>=0;
       var onLabel = (cfg.label ? "подключено" : "+"+nd.n+" моделей");
       var offLabel = (cfg.label ? "подключить" : "запустить разработку");
-      html += "<div class='tnode"+(on?" on":"")+"' onclick=\"G.treeNode('"+nd.id+"')\">"+
-        "<div class='tt'>"+esc(nd.t)+"</div><div class='tn'>"+(on?onLabel:offLabel)+"</div></div>";
+      var lbl = on ? (nd.trap ? "лишнее - убрать" : onLabel) : offLabel;
+      html += "<div class='tnode"+(on?" on":"")+(on&&nd.trap?" trap":"")+"' onclick=\"G.treeNode('"+nd.id+"')\">"+
+        "<div class='tt'>"+esc(nd.t)+"</div><div class='tn'>"+lbl+"</div></div>";
     });
     html += "</div></div>";
     if(li < cfg.levels.length-1) html += "<div class='tlink'>↓ результаты уровня питают следующий ↓</div>";
   });
   html += "</div>";
   html += "<div class='adv-say show' id='treeinfo' style='"+(S.ui.tinfo?"":"display:none")+"'>"+(S.ui.tinfo||"")+"</div>";
-  var cnt = treeCount(cfg), allDone = done.length===total;
+  var st = treeStats(cfg), cnt = treeCount(cfg);
   html += "<div class='mxstatus'>"+esc(cfg.label||"Моделей в системе")+": <b style='font-size:16px;color:var(--acc2)'>"+cnt+"</b> из "+cfg.target+
-    (allDone ? " - <span style='color:var(--ok)'>готово</span>" : "") + "</div>";
-  if(allDone) html += "<div class='verdict show good'><b>Гарин:</b> "+esc(cfg.done)+"</div>";
-  shell(sc, html, nextBtnHtml("Готово", allDone));
+    (st.allDone ? " - <span style='color:var(--ok)'>готово</span>" : "") + "</div>";
+  if(st.trapSel.length){
+    html += "<div class='verdict show weak'><b>Гарин:</b> сюда затесалось лишнее. "+
+      st.trapSel.map(function(nd){ return "<b>"+esc(nd.t)+"</b> - "+esc(nd.info); }).join(" ")+
+      " Убери лишнее (клик по узлу еще раз) - и продолжим.</div>";
+  } else if(st.allDone){
+    html += "<div class='verdict show good'><b>Гарин:</b> "+esc(cfg.done)+"</div>";
+  }
+  shell(sc, html, nextBtnHtml("Готово", st.allDone));
 }
 function treeNode(id){
   var sc = STORY.scenes[S.scene], cfg = treeCfg(sc);
   S.ui.tdone = S.ui.tdone || [];
-  var node = null;
-  cfg.levels.forEach(function(lv){ lv.nodes.forEach(function(nd){ if(nd.id===id) node=nd; }); });
-  if(S.ui.tdone.indexOf(id)<0){ S.ui.tdone.push(id); logEv("tree",{node:id}); }
-  S.ui.tinfo = "<b>"+esc(node.t)+":</b> "+esc(node.info);
+  var node = treeNodeById(cfg, id);
+  var ix = S.ui.tdone.indexOf(id);
+  if(ix>=0){ S.ui.tdone.splice(ix,1); }                  /* повторный клик - снять узел */
+  else { S.ui.tdone.push(id); logEv("tree",{node:id, trap:!!(node&&node.trap)}); }
+  if(node) S.ui.tinfo = "<b>"+esc(node.t)+":</b> "+esc(node.info);
   save(); renderTree(sc);
 }
 function confirmTree(sc){
   var cfg = treeCfg(sc);
-  var total = 0; cfg.levels.forEach(function(lv){ total += lv.nodes.length; });
-  if((S.ui.tdone||[]).length!==total) return;
+  if(!treeStats(cfg).allDone) return;
   if(sc.cost) applyFx({weeks:sc.cost.weeks||0, budget:sc.cost.budget||0});
   logEv("treeDone",{count:treeCount(cfg)});
   goNext(sc);
