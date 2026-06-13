@@ -77,6 +77,28 @@ function wrap(inner){
    поворотных). Флаг изделия выставляет engine.bindProduct -> window.GAME_IZD. */
 function IZ(){ return window.GAME_IZD || 'gtd'; }
 function isUav(){ return IZ()==='uav'; }
+function isSE(){ return IZ()==='se_oilgas'; }
+/* станок-качалка (нефтегаз): силуэт, балансир покачивается */
+function craftOil(cx,cy,sc,wire){
+  sc = sc||1; var col = wire?"none":"#101d31";
+  var st = "stroke='var(--acc2)' stroke-opacity='.6'"+(wire?" stroke-dasharray='5 4'":"");
+  return "<g transform='translate("+cx+","+cy+") scale("+sc+")'>"+
+    "<rect x='-48' y='16' width='96' height='6' rx='2' fill='"+col+"' "+st+"/>"+              /* рама */
+    "<path d='M 4 -30 L -12 16 M 4 -30 L 20 16' fill='none' "+st+" stroke-width='2'/>"+        /* стойка */
+    "<g class='art-sway' style='transform-origin:4px -30px'>"+                                  /* балансир качается */
+      "<rect x='-46' y='-33' width='86' height='5' rx='2' fill='"+col+"' "+st+"/>"+
+      "<path d='M -46 -33 q -11 0 -11 11 l 7 0 q 0 -7 7 -7 Z' fill='var(--acc2)' opacity='.82'/>"+ /* головка балансира */
+      "<circle cx='34' cy='-27' r='8' fill='var(--acc)' opacity='.8'/>"+                        /* противовес */
+    "</g>"+
+    "<rect x='-52' y='-22' width='2.6' height='38' fill='var(--acc2)' opacity='.7'/>"+          /* полированный шток */
+    "<rect x='-58' y='14' width='13' height='8' rx='1.5' fill='#16263e' "+st+"/>"+              /* устье скважины */
+    /* резервуар рядом */
+    "<g transform='translate(64,-2)'><ellipse cx='0' cy='-14' rx='15' ry='4' fill='#16263e' "+st+"/>"+
+      "<rect x='-15' y='-14' width='30' height='30' fill='"+col+"' "+st+"/>"+
+      "<ellipse cx='0' cy='16' rx='15' ry='4' fill='"+col+"' "+st+"/></g>"+
+  "</g>";
+}
+function craftSEmini(){ return craftOil(40,24,0.34,false); }
 /* воздушный винт - вращающийся */
 function prop(x,y,delay,wire){
   var col = wire ? "none" : "var(--acc2)";
@@ -88,6 +110,7 @@ function prop(x,y,delay,wire){
 }
 /* летающее крыло «Снегирь» (вид сверху), нос вверх, 4 мотора. cx,cy - центр; sc - масштаб */
 function craft(cx,cy,sc,wire){
+  if(isSE()) return craftOil(cx,cy,sc,wire);   /* нефтегаз: станок-качалка */
   sc = sc||1;
   var fill = wire ? "none" : "#101d31";
   var dash = wire ? " stroke-dasharray='5 4'" : "";
@@ -258,7 +281,7 @@ function desk(){
     /* правый экран: турбина */
     "<g transform='translate(490,38)'>"+
       "<rect x='0' y='0' width='150' height='92' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
-      (isUav()
+      ((isUav()||isSE())
         ? craft(75,52,0.62,false)
         : "<g transform='translate(75,46)'>"+
           "<g class='art-rotate-slow'>"+
@@ -583,6 +606,64 @@ function twinmirror(){
   );
 }
 
+/* ---------- локации трека «Системный инжиниринг (нефтегаз)» ---------- */
+/* геологоразведка: сейсмический разрез + буровая вышка + керн */
+function geo(){
+  var layers="";
+  for(var i=0;i<5;i++){ var y=22+i*15;
+    layers+="<path d='M 0 "+y+" q 32 "+((i%2)?-7:7)+" 64 0 t 64 0' fill='none' stroke='var(--acc2)' stroke-width='1.4' opacity='"+(0.55-i*0.06).toFixed(2)+"'/>"; }
+  var derrick="<g transform='translate(620,40)'>"+
+    "<path d='M -22 110 L 0 0 L 22 110 M -16 110 L 16 110 M -11 74 L 11 74 M -6 38 L 6 38' fill='none' stroke='var(--acc2)' stroke-width='1.6' opacity='.6'/>"+
+    "<circle cx='0' cy='2' r='2.4' fill='var(--acc)' class='art-flicker'/></g>";
+  return wrap(
+    lamp(230,56,false)+
+    "<g transform='translate(60,26)'><rect x='0' y='0' width='240' height='110' rx='5' fill='#0c1626' stroke='var(--line)'/>"+
+      "<text x='12' y='16' font-size='9' fill='var(--dim)' font-family='Segoe UI'>СЕЙСМОРАЗВЕДКА 3D - РАЗРЕЗ</text>"+
+      "<g transform='translate(10,18)'>"+layers+"</g>"+
+      "<circle cx='150' cy='62' r='3' fill='var(--acc)' class='art-flicker'/><circle cx='205' cy='44' r='3' fill='var(--warn)' class='art-flicker' style='animation-delay:1s'/></g>"+
+    "<g transform='translate(330,92)'><rect x='0' y='0' width='16' height='54' rx='3' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+      "<line x1='0' y1='16' x2='16' y2='16' stroke='var(--acc2)' opacity='.4'/><line x1='0' y1='34' x2='16' y2='34' stroke='var(--acc2)' opacity='.4'/></g>"+
+    derrick + sit(360,152,1.0,true) + stand(470,154,1.05,false) + floor()
+  );
+}
+/* нефтегаз-завод: резервуары, эстакада с потоком, колонна, факел */
+function oilplant(){
+  function tank(x,h){ return "<g transform='translate("+x+",146)'><ellipse cx='0' cy='"+(-h)+"' rx='26' ry='7' fill='#16263e' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+    "<rect x='-26' y='"+(-h)+"' width='52' height='"+h+"' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.45'/>"+
+    "<ellipse cx='0' cy='0' rx='26' ry='7' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.45'/></g>"; }
+  var flare="<g transform='translate(700,40)'>"+
+    "<rect x='-3' y='0' width='6' height='106' fill='#152238' stroke='var(--line)'/>"+
+    "<path d='M 0 -4 q -10 -14 0 -30 q 10 16 0 30 Z' fill='var(--acc)' opacity='.8' class='art-shake'/>"+
+    "<path d='M 0 -6 q -5 -8 0 -18 q 5 10 0 18 Z' fill='var(--warn)' opacity='.9' class='art-glow'/></g>";
+  return wrap(
+    lamp(180,54,false)+lamp(520,54,false)+
+    tank(92,96)+tank(172,120)+tank(252,80)+
+    "<path d='M 30 60 H 300' stroke='var(--acc2)' stroke-width='2.4' opacity='.5' stroke-dasharray='8 7' class='art-flow'/>"+
+    "<path d='M 300 60 H 660' stroke='var(--acc)' stroke-width='2.4' opacity='.55' stroke-dasharray='8 7' class='art-flow' style='animation-delay:.6s'/>"+
+    "<g transform='translate(404,40)'><rect x='-12' y='0' width='24' height='110' rx='5' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.5'/>"+
+      (function(){var s='';for(var k=0;k<5;k++)s+="<line x1='-12' y1='"+(18+k*18)+"' x2='12' y2='"+(18+k*18)+"' stroke='var(--acc2)' opacity='.35'/>";return s;})()+
+      "<text x='-12' y='-6' font-size='8.5' fill='var(--dim)' font-family='Segoe UI'>колонна</text></g>"+
+    flare + stand(500,154,1.05,true) + floor()
+  );
+}
+/* системная мастерская: единая модель как блок-диаграмма (SysML) */
+function sysworkshop(){
+  var blocks="<g transform='translate(20,28)'>"+
+    "<rect x='0' y='10' width='74' height='32' rx='4' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.6'/><text x='8' y='30' font-size='8.5' fill='var(--acc2)' font-family='Segoe UI'>Требования</text>"+
+    "<rect x='120' y='10' width='78' height='32' rx='4' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.6'/><text x='128' y='30' font-size='8.5' fill='var(--acc2)' font-family='Segoe UI'>Архитектура</text>"+
+    "<rect x='60' y='66' width='78' height='32' rx='4' fill='#101d31' stroke='var(--acc2)' stroke-opacity='.6'/><text x='68' y='86' font-size='8.5' fill='var(--acc2)' font-family='Segoe UI'>Интерфейсы</text>"+
+    "<path d='M 74 26 H 120' stroke='var(--acc2)' stroke-dasharray='5 4' class='art-flow'/>"+
+    "<path d='M 99 42 V 66' stroke='var(--acc2)' stroke-dasharray='5 4' class='art-flow' style='animation-delay:.5s'/>"+
+    "<path d='M 155 42 L 120 66' stroke='var(--acc)' stroke-dasharray='5 4' class='art-flow' style='animation-delay:1s'/></g>";
+  return wrap(
+    lamp(250,60,false)+
+    "<g transform='translate(40,24)'><rect x='0' y='0' width='280' height='126' rx='6' fill='#0c1626' stroke='var(--line)'/>"+
+      "<text x='14' y='18' font-size='9' fill='var(--dim)' font-family='Segoe UI'>ЕДИНАЯ СИСТЕМНАЯ МОДЕЛЬ (SysML)</text>"+blocks+"</g>"+
+    monitor(360,62,92,58,0) +
+    sit(430,152,1.0,true) + stand(530,154,1.05,true) + arm(538,116) + floor()
+  );
+}
+
 /* ---------- карта «локация -> сцена» ---------- */
 var BYLOC = {
   "Кабинет директора": director,
@@ -600,7 +681,19 @@ var BYLOC = {
   "Натурный испытательный стенд": testcell,
   "Диспетчерская эксплуатации": ops,
   "Изделие и его двойник": twinmirror,
-  "Фабрика цифровых двойников": fab
+  "Фабрика цифровых двойников": fab,
+  /* трек «Системный инжиниринг (нефтегаз)» */
+  "Системная мастерская": sysworkshop,
+  "Зал совета программы": meeting,
+  "Геологический отдел": geo,
+  "Картографический зал": geo,
+  "Лаборатория керна и флюидов": geo,
+  "Установки гидроочистки и серы": oilplant,
+  "Узел приемки товарной продукции": oilplant,
+  "Расчетный центр": hpccenter,
+  "Заводоуправление": corridor,
+  "Кабинет директора программы": director,
+  "Кабинет главного технолога": office
 };
 
 return {

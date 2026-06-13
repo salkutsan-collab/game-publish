@@ -26,8 +26,41 @@ function bindProduct(izd){
   IZD = reg[izd] ? izd : "gtd";
   window.GAME_IZD = IZD;   // арт (art.js) рисует мотив изделия по этому флагу
   PRODUCT_KEYS.forEach(function(k){ if(d[k]!==undefined) window[k]=d[k]; });
+  window.RESOURCES = d.RESOURCES || null;   // конфиг ресурсной панели трека (null -> панель по умолчанию)
 }
 function izdLabel(){ var d=(window.GAMEDATA||{})[IZD]; return (d&&d.izdLabel)||"авиадвигатель (ГТД)"; }
+function izdWord(){ var d=(window.GAMEDATA||{})[IZD]; return (d&&d.izdWord)||"Изделие"; }
+
+/* ---------- выбор трека и продукта на входе (двухуровневый) ----------
+   Карточки выбора строятся из реестра GAMEDATA и группируются по треку. */
+var TRACKMETA = {
+  twin:{ label:"Трек: Цифровой двойник изделия", order:1 },
+  se:  { label:"Трек: Системный инжиниринг (MBSE)", order:2 }
+};
+function renderPicker(){
+  var box = el("izdpick"); if(!box) return;
+  var reg = window.GAMEDATA || {};
+  var byTrack = {};
+  Object.keys(reg).forEach(function(k){ var t=reg[k].track||"twin"; (byTrack[t]=byTrack[t]||[]).push(k); });
+  var tracks = Object.keys(byTrack).sort(function(a,b){ return ((TRACKMETA[a]||{}).order||9)-((TRACKMETA[b]||{}).order||9); });
+  var html="", first=true;
+  tracks.forEach(function(t){
+    html += "<div class='trackgrp'><div class='trackhead'>"+esc((TRACKMETA[t]||{}).label||t)+"</div><div class='trackrow'>";
+    byTrack[t].forEach(function(k){
+      var pk = reg[k].pick || { emoji:"📦", title:reg[k].izdShort||k, sub:"" };
+      html += "<div class='izdopt"+(first?" on":"")+"' data-izd='"+esc(k)+"' onclick='G.pickIzd(this)'>"+
+        "<div class='izdic'>"+(pk.emoji||"")+"</div><div class='izdt'><b>"+esc(pk.title)+"</b><span>"+esc(pk.sub||"")+"</span></div></div>";
+      first=false;
+    });
+    html += "</div></div>";
+  });
+  box.innerHTML = html;
+}
+function pickerLabel(){
+  var lab = el("login-izd"); if(!lab) return;
+  var pk = ((window.GAMEDATA||{})[IZD]||{}).pick || {};
+  lab.innerHTML = esc(izdWord())+": <b>"+esc(izdLabel())+"</b>"+(pk.sub?" · "+esc(pk.sub):"");
+}
 
 /* Авто-отправка отчета преподавателю - БЕЗ действий игрока: на финале
    и при закрытии страницы. Та же гугл-форма, что у тренажера «Фабрика
@@ -197,7 +230,7 @@ function spendCores(n){
 /* ---------- утилиты ---------- */
 function el(id){ return document.getElementById(id); }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
-function sub(t){ return t.replace(/\{name\}/g, esc(S.name)); }
+function sub(t){ return (t==null?"":""+t).replace(/\{name\}/g, esc(S.name)); }
 function say(who, text){
   var c = CHARS[who];
   return "<div class='say "+(c.cls||"")+"'><div class='ava'>"+c.ava+"</div><div class='b'>"+
@@ -217,21 +250,35 @@ function permFor(key, n){
   return idx;
 }
 
-/* ---------- верхняя панель ---------- */
+/* ---------- верхняя панель ----------
+   Ресурсная панель строится из конфига трека (window.RESOURCES) либо из набора
+   по умолчанию (трек двойников). Все треки используют одни и те же ключи состояния
+   (weeks/budget/cores/trust/adeq), меняются только подписи/единицы/трактовка. */
+var DEFAULT_RES = [
+  { key:"weeks",  label:"Недели",       kind:"remaining", invert:true, tip:"Время проекта: всего 52 недели до сдачи. Каждое решение и переделка стоят недель. Уложитесь в срок - бонус к итоговому званию." },
+  { key:"budget", label:"Бюджет",       kind:"plain", unit:"млн", tip:"Деньги проекта, млн руб. Идут на лицензии, вычислительные мощности, испытания и переделки." },
+  { key:"cores",  label:"Ядро-часы",    kind:"plain", noDelta:true, tip:"Вычислительный ресурс на расчёты и виртуальные испытания. Свои кончились - расчёты оплачиваются подрядчику деньгами." },
+  { key:"trust",  label:"Доверие",      kind:"plain", tip:"Доверие директора и заказчика к вам. Растёт от обоснованных решений, падает от слабых. Влияет на итоговое звание." },
+  { key:"adeq",   label:"Адекватность", kind:"percent", accent:true, tip:"Насколько цифровой двойник соответствует реальному изделию - главный показатель качества. Растёт от проверенных моделей и испытаний. Влияет на итоговое звание." }
+];
+function resCfg(){ return (window.RESOURCES && window.RESOURCES.length) ? window.RESOURCES : DEFAULT_RES; }
+function resChip(rc, r, d){
+  var delta = rc.noDelta ? "" : d(rc.key, !!rc.invert);
+  if(rc.kind==="remaining")
+    return "<div class='chip' title='"+esc(rc.tip||"")+"'><small>"+esc(rc.label)+"</small><b>"+(WEEKS_TOTAL-r[rc.key])+" <span style='color:var(--dim);font-weight:400'>/ "+WEEKS_TOTAL+"</span>"+delta+"</b></div>";
+  if(rc.kind==="percent")
+    return "<div class='chip"+(rc.accent?" adeq":"")+"' title='"+esc(rc.tip||"")+"'><small>"+esc(rc.label)+"</small><b>"+r[rc.key]+"%"+delta+"</b><div class='bar'><i style='width:"+r[rc.key]+"%'></i></div></div>";
+  return "<div class='chip' title='"+esc(rc.tip||"")+"'><small>"+esc(rc.label)+"</small><b>"+r[rc.key]+(rc.unit?" <span style='color:var(--dim);font-weight:400'>"+esc(rc.unit)+"</span>":"")+delta+"</b></div>";
+}
 function renderTop(sc){
-  el("actlabel").innerHTML = esc(sc.act||"") + "<br>Изделие: " + esc(izdLabel());
+  el("actlabel").innerHTML = esc(sc.act||"") + "<br>" + esc(izdWord()) + ": " + esc(izdLabel());
   var r = S.res, p = prevRes || r;
   function d(key, inverted){
     var diff = r[key]-p[key]; if(!diff) return "";
     var up = inverted ? diff<0 : diff>0;
     return " <span class='delta "+(up?"up":"down")+"'>"+(diff>0?"+":"")+diff+"</span>";
   }
-  el("resbar").innerHTML =
-    "<div class='chip' title='Время проекта: всего 52 недели до сдачи. Каждое решение и переделка стоят недель. Уложитесь в срок - бонус к итоговому званию.'><small>Недели</small><b>"+(WEEKS_TOTAL-r.weeks)+" <span style='color:var(--dim);font-weight:400'>/ "+WEEKS_TOTAL+"</span>"+d("weeks",true)+"</b></div>"+
-    "<div class='chip' title='Деньги проекта, млн руб. Идут на лицензии, вычислительные мощности, испытания и переделки.'><small>Бюджет</small><b>"+r.budget+" <span style='color:var(--dim);font-weight:400'>млн</span>"+d("budget")+"</b></div>"+
-    "<div class='chip' title='Вычислительный ресурс на расчёты и виртуальные испытания. Свои кончились - расчёты оплачиваются подрядчику деньгами.'><small>Ядро-часы</small><b>"+r.cores+"</b></div>"+
-    "<div class='chip' title='Доверие директора и заказчика к вам. Растёт от обоснованных решений, падает от слабых. Влияет на итоговое звание.'><small>Доверие</small><b>"+r.trust+d("trust")+"</b></div>"+
-    "<div class='chip adeq' title='Насколько цифровой двойник соответствует реальному изделию - главный показатель качества. Растёт от проверенных моделей и испытаний. Влияет на итоговое звание.'><small>Адекватность</small><b>"+r.adeq+"%"+d("adeq")+"</b><div class='bar'><i style='width:"+r.adeq+"%'></i></div></div>";
+  el("resbar").innerHTML = resCfg().map(function(rc){ return resChip(rc, r, d); }).join("");
   prevRes = { weeks:r.weeks, budget:r.budget, cores:r.cores, trust:r.trust, adeq:r.adeq };
 }
 
@@ -240,6 +287,7 @@ function renderSide(){
   var labels = { have:"есть", no:"нет", rent:"аренда" };
   el("p-tech").innerHTML = "<h3>Карта технологий</h3>" + S.tech.map(function(t){
     var t0 = null; TECH0.forEach(function(x){ if(x.id===t.id) t0=x; });
+    if(!t0) return "";
     return "<div class='tech'>"+esc(t0.t)+" <span class='tag "+t.st+"'>"+labels[t.st]+"</span></div>";
   }).join("") + "<div class='counter'>Чего не хватает - видно заранее. Понять, что и когда понадобится, - часть работы.</div>";
 
@@ -260,7 +308,7 @@ function renderSide(){
 
   var keys = Object.keys(GLOSS);
   el("p-gloss").innerHTML = "<h3>Справочник курса</h3>" + (S.gloss.length
-    ? S.gloss.map(function(k){ var g=GLOSS[k]; return "<div class='gl-item'><div class='t'>"+esc(g.t)+"</div><div class='d'>"+esc(g.d)+"</div></div>"; }).join("")
+    ? S.gloss.map(function(k){ var g=GLOSS[k]; if(!g) return ""; return "<div class='gl-item'><div class='t'>"+esc(g.t)+"</div><div class='d'>"+esc(g.d)+"</div></div>"; }).join("")
     : "<div class='counter'>Пока пусто. Термины открываются по ходу сюжета.</div>")
     + "<div class='counter'>Открыто терминов: <b>"+S.gloss.length+"</b> из "+keys.length+" (в срезе)</div>";
 
@@ -639,6 +687,79 @@ function confirmTree(sc){
   if(sc.cost) applyFx({weeks:sc.cost.weeks||0, budget:sc.cost.budget||0});
   logEv("treeDone",{count:treeCount(cfg)});
   goNext(sc);
+}
+
+/* ---------- iface: согласование интерфейсов (элементы SysML IBD) ----------
+   Данные сцены: sc.outs[{id,t,block}], sc.ins[{id,t,block}], sc.correct{outId:inId},
+   sc.linkWhy{outId:почему рассогласовано}, sc.cost/okFx/failFx/done/hint.
+   Игрок связывает каждый выход подсистемы с верным входом; рассогласование
+   подсвечивается и поясняется (правило: «соединить всё подряд» неверно). */
+function mentorName(){ return ((CHARS.mentor||{}).name)||"Наставник"; }
+function renderIface(sc){
+  var st = S.ui.if || (S.ui.if = { sel:null, links:{}, wrong:[], runs:0, checked:false });
+  var outs = sc.outs||[], ins = sc.ins||[];
+  function inName(id){ var x=ins.filter(function(z){return z.id===id;})[0]; return x?x.t:""; }
+  var html = "<div class='task'>"+sub(sc.task)+"</div>";
+  html += "<div class='need'>"+esc(sc.intro||"Внутренняя диаграмма блоков (SysML IBD): свяжите каждый ВЫХОД подсистемы с тем ВХОДОМ, который он реально питает.")+"</div>";
+  html += "<div class='ibd'><div class='ibdcol'><h5>Выходы подсистем</h5>";
+  outs.forEach(function(o){
+    var asg = st.links[o.id], wrong = st.wrong.indexOf(o.id)>=0;
+    html += "<div class='port out"+(st.sel===o.id?" sel":"")+(wrong?" wrong":(asg?" linked":""))+"' onclick=\"G.ifacePick('out','"+o.id+"')\">"+
+      "<div class='pblk'>"+esc(o.block)+"</div><div class='pt'>"+esc(o.t)+"</div>"+
+      "<div class='parrow'>"+(asg?"→ "+esc(inName(asg)):"→ не связано")+"</div>"+
+      (wrong && sc.linkWhy && sc.linkWhy[o.id] ? "<div class='pwhy'>"+esc(sc.linkWhy[o.id])+"</div>" : "")+"</div>";
+  });
+  html += "</div><div class='ibdcol'><h5>Входы подсистем</h5>";
+  ins.forEach(function(i){
+    var taken = Object.keys(st.links).some(function(k){return st.links[k]===i.id;});
+    html += "<div class='port in"+(taken?" linked":"")+(st.sel?" arm":"")+"' onclick=\"G.ifacePick('in','"+i.id+"')\">"+
+      "<div class='pblk'>"+esc(i.block)+"</div><div class='pt'>"+esc(i.t)+"</div></div>";
+  });
+  html += "</div></div>";
+  if(st.checked && !st.wrong.length)
+    html += "<div class='verdict show good'><b>"+esc(mentorName())+":</b> "+esc(sc.done||"Интерфейсы согласованы - подсистемы стыкуются по веществу, энергии и данным.")+"</div>";
+  else if(st.wrong.length)
+    html += "<div class='verdict show weak'><b>"+esc(mentorName())+":</b> рассогласовано интерфейсов: "+st.wrong.length+". Смотри красные блоки и пояснения, переставь связь и проверь снова.</div>";
+  html += "<div class='hint' id='hintbox'><b>"+esc(mentorName())+":</b> "+esc(sc.hint||"Спроси: что выходит из этой подсистемы и куда это физически идет дальше по цепочке.")+"</div>";
+  var allLinked = outs.every(function(o){ return st.links[o.id]; });
+  var foot = (st.checked && !st.wrong.length)
+    ? nextBtnHtml("Продолжить", true)
+    : hintBtnHtml()+"<button class='nextbtn"+(allLinked?" ready":"")+"' id='nextbtn' onclick='G.ifaceCheck()'>Проверить интерфейсы</button>";
+  shell(sc, html, foot);
+}
+function ifacePick(kind, id){
+  var st = S.ui.if; if(!st || (st.checked && !st.wrong.length)) return;
+  if(kind==="out"){ st.sel = (st.sel===id ? null : id); }
+  else {
+    if(st.sel){
+      Object.keys(st.links).forEach(function(k){ if(st.links[k]===id) delete st.links[k]; }); /* вход занят одним выходом */
+      st.links[st.sel] = id;
+      var wi = st.wrong.indexOf(st.sel); if(wi>=0) st.wrong.splice(wi,1);
+      st.sel = null;
+    }
+  }
+  save(); renderIface(STORY.scenes[S.scene]);
+}
+function ifaceCheck(){
+  var sc = STORY.scenes[S.scene], st = S.ui.if;
+  if(!st) return;
+  var outs = sc.outs||[];
+  if(!outs.every(function(o){ return st.links[o.id]; })) return;
+  st.runs = (st.runs||0)+1;
+  if(st.runs===1 && sc.cost) applyFx(sc.cost);
+  var wrong = [];
+  outs.forEach(function(o){ if(st.links[o.id] !== sc.correct[o.id]) wrong.push(o.id); });
+  if(wrong.length){
+    st.wrong = wrong;
+    applyFx(sc.failFx || { weeks:1, cores:3 });
+    logEv("iface",{ run:st.runs, wrong:wrong.length });
+    save(); renderIface(sc); renderTop(sc);
+    return;
+  }
+  st.checked = true; st.wrong = [];
+  applyFx(sc.okFx || { adeq:6, trust:2, art:"iface", tech:{icd:"have"} });
+  logEv("iface",{ run:st.runs, done:true });
+  save(); renderIface(sc); renderTop(sc); renderSide();
 }
 
 /* ---------- camp: кампания виртуальных испытаний (акт 6) ---------- */
@@ -1144,7 +1265,24 @@ function projRank(){
   var rank = score>=85 ? "Главный конструктор" : score>=70 ? "Ведущий инженер" : score>=55 ? "Инженер проекта" : "Менеджер презентаций";
   return { score:score, rank:rank };
 }
+/* подстановка в строку дашборда: «{adeq}%» -> ресурс; «{flag:имя=знач?да:нет}» -> по флагу */
+function fdashVal(v){
+  v = (""+v).replace(/\{flag:(\w+)=([^?]+)\?([^:}]*):([^}]*)\}/g, function(_,name,val,a,b){ return (S.flags[name]===val)?a:b; });
+  return v.replace(/\{(\w+)\}/g, function(_,k){ return (S.res[k]!=null)?S.res[k]:("{"+k+"}"); });
+}
 function renderFdash(sc){
+  if(sc.cells){   /* обобщенный дашборд из конфига сцены (для любого трека) */
+    var pr2 = projRank();
+    var h2 = "<div class='task'>"+sub(sc.task||sc.title||"")+"</div>";
+    for(var ri=0; ri<sc.cells.length; ri+=4){
+      h2 += "<div class='sumrow'>"+ sc.cells.slice(ri,ri+4).map(function(c){
+        return "<div class='sumcell'>"+esc(c.label)+"<b>"+esc(fdashVal(c.val))+"</b></div>"; }).join("") +"</div>";
+    }
+    h2 += "<div class='award'><div class='ic'>📊</div><div><div class='t'>"+esc(sc.scoreLabel||"Готовность к защите")+": "+pr2.score+" из 100</div>"+
+      "<div class='d'>"+esc(sc.note||"Сводный итог решений за весь проект.")+"</div></div></div>";
+    shell(sc, h2, nextBtnHtml(sc.nextLabel||"Дальше", true));
+    return;
+  }
   var r = S.res;
   var tests = 0; S.log.forEach(function(e){ if(e.type==="camp" && e.tests) tests = e.tests; });
   var lost = !!S.flags.sampleLost;
@@ -1338,6 +1476,7 @@ function render(){
   else if(sc.type==="reqfill") renderReqfill(sc);
   else if(sc.type==="cases") renderCases(sc);
   else if(sc.type==="tree") renderTree(sc);
+  else if(sc.type==="iface") renderIface(sc);
   else if(sc.type==="camp") renderCamp(sc);
   else if(sc.type==="ntest") renderNtest(sc);
   else if(sc.type==="sens") renderSens(sc);
@@ -1360,6 +1499,7 @@ function resolveNext(sc){
   return sc.next;
 }
 function goNext(sc){
+  if(sc && sc.onleave){ applyFx(sc.onleave); }   /* эффекты при выходе из сцены (напр. установка флага) */
   S.ui = {};
   S.scene = resolveNext(sc);
   var nsc = STORY.scenes[S.scene];
@@ -1386,18 +1526,21 @@ window.addEventListener("beforeunload", sendOnExit);
 /* ---------- публичный интерфейс ---------- */
 return {
   init: function(){
-    /* сохраненная игра может быть по другому изделию - привязываем
+    /* сохраненная игра может быть по другому продукту/треку - привязываем
        его ДО load(), который уже читает STORY выбранного продукта */
     var pre=null; try{ var raw=localStorage.getItem(SAVE_KEY); if(raw) pre=JSON.parse(raw); }catch(e){}
     bindProduct(pre && pre.izd ? pre.izd : "gtd");
     var saved = load();
+    renderPicker();   // строит карточки выбора (группы по трекам); по умолчанию выбран первый
+    var def = document.querySelector(".izdopt.on");
+    bindProduct(def ? (def.getAttribute("data-izd")||"gtd") : "gtd");
+    pickerLabel();
     if(saved){
       S = saved;
+      bindProduct(S.izd||"gtd");   // восстановить продукт сохраненной игры
       el("login-new").classList.add("hidden");
       el("login-cont").classList.remove("hidden");
       el("contbtn").textContent = "Продолжить · "+S.name+" · "+izdLabel();
-    } else {
-      bindProduct("gtd");   // для нового проекта - изделие по умолчанию
     }
     el("login").classList.remove("hidden");
   },
@@ -1405,7 +1548,7 @@ return {
     document.querySelectorAll(".izdopt").forEach(function(o){ o.classList.remove("on"); });
     elOpt.classList.add("on");
     bindProduct(elOpt.getAttribute("data-izd") || "gtd");
-    var lab = el("login-izd"); if(lab) lab.innerHTML = "Изделие: <b>"+esc(izdLabel())+"</b> · полный сюжет: пролог + 11 актов + финал";
+    pickerLabel();
   },
   start: function(){
     var name = el("pname").value.trim() || "Инженер";
@@ -1448,6 +1591,7 @@ return {
     else if(sc.type==="reqfill") confirmReqfill(sc);
     else if(sc.type==="cases"){ if(S.ui.cs && S.ui.cs.checked) confirmCases(sc); }
     else if(sc.type==="tree") confirmTree(sc);
+    else if(sc.type==="iface"){ if(S.ui.if && S.ui.if.checked && !(S.ui.if.wrong||[]).length) goNext(sc); }
     else if(sc.type==="camp"){ if(S.ui.cp && S.ui.cp.done) goNext(sc); }
     else if(sc.type==="ntest") ntestStep(sc);
     else if(sc.type==="sens"){ if(S.ui.sn && S.ui.sn.done) goNext(sc); }
@@ -1478,7 +1622,8 @@ return {
   },
   pick: pick, just: just, talk: talk, slide: slide, reqOpen: reqOpen,
   caseRead: caseRead, casePick: casePick, casesCheck: casesCheck,
-  treeNode: treeNode, diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
+  treeNode: treeNode, ifacePick: ifacePick, ifaceCheck: ifaceCheck,
+  diagAct: diagAct, diagConclude: diagConclude, validPick: validPick,
   campSel: campSel, campLaunch: campLaunch,
   sensPick: sensPick, sensLaunch: sensLaunch,
   essayInput: essayInput, essaySubmit: essaySubmit,

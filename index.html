@@ -23,17 +23,8 @@
         onload="var s=this.nextElementSibling; if(s) s.remove()" onerror="this.remove()"><span>CML-Bench® EDU</span></div>
     </div>
     <div id="login-new">
-      <div class="izdlab">Выберите изделие для проекта</div>
-      <div class="izdpick">
-        <div class="izdopt on" data-izd="gtd" onclick="G.pickIzd(this)">
-          <div class="izdic">🛠️</div>
-          <div class="izdt"><b>Авиадвигатель (ГТД)</b><span>классический сюжет</span></div>
-        </div>
-        <div class="izdopt" data-izd="uav" onclick="G.pickIzd(this)">
-          <div class="izdic">🛩️</div>
-          <div class="izdt"><b>БПЛА «Снегирь»</b><span>гибрид VTOL · летающее крыло</span></div>
-        </div>
-      </div>
+      <div class="izdlab">Выберите трек и изделие</div>
+      <div class="izdpick" id="izdpick"></div>
       <input id="pname" type="text" maxlength="30" placeholder="Ваше имя" autocomplete="off">
       <button class="btn acc" onclick="G.start()">Начать проект</button>
     </div>
@@ -83,6 +74,13 @@
 
 <script src="story.js"></script>
 <script src="story_uav.js"></script>
+<script src="story_se.js"></script>
+<script src="_se_parts/razvedka.js"></script>
+<script src="_se_parts/dobycha.js"></script>
+<script src="_se_parts/transport.js"></script>
+<script src="_se_parts/pererabotka.js"></script>
+<script src="_se_parts/final.js"></script>
+<script src="_se_parts/_assemble_se.js"></script>
 <script src="art.js"></script>
 <script src="engine.js"></script>
 </body>

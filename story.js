@@ -1482,5 +1482,7 @@ window.GAMEDATA.gtd = {
   A1CASES:A1CASES, A3TREE:A3TREE, A4DIAG:A4DIAG, A6CAMP:A6CAMP, A7TREE:A7TREE,
   ESSAY:ESSAY, FINTREE:FINTREE, TREES:TREES, REDO:REDO, REVIEW_LESSONS:REVIEW_LESSONS,
   DECISIONS:DECISIONS, NTEST:NTEST, SENS:SENS, A5VALID:A5VALID, ACTS:ACTS, STORY:STORY,
-  izdLabel:"авиадвигатель (ГТД)", izdShort:"ГТД"
+  izdLabel:"авиадвигатель (ГТД)", izdShort:"ГТД",
+  track:"twin", izdWord:"Изделие",
+  pick:{ emoji:"🛠️", title:"Авиадвигатель (ГТД)", sub:"классический сюжет" }
 };
